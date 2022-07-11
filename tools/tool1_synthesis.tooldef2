@@ -1,0 +1,23 @@
+from "lib:cif3" import *;
+
+// Folder where all generated files are found and stored.
+string genFolder      = "../generated_files/";
+
+// Input files
+string discretePlant  = genFolder + "discrete.cif";
+string inclusivePlant = genFolder + "inclusive.cif";
+
+// Output files
+string supervisor     = genFolder + "G_supervisor.cif";
+string controller     = genFolder + "G_controller.cif";
+
+// Perform synthesis
+cif3datasynth(discretePlant,
+    "-o", supervisor,
+    "--bdd-table=10000000",
+    "--stats=+timing,+bdd-gc,+bdd-resize",
+    "-m debug",
+    "--option-dialog=1");
+
+// Merge supervisor and inclusive plant.
+cif3merge(supervisor, inclusivePlant, "-o", controller);

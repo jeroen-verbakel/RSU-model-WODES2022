@@ -1,0 +1,54 @@
+import "../generated_files/constants.cif";
+
+const int msgLen = 18;
+type Message = list[msgLen] Byte;
+
+func bool send2(int Q_nr, Q_messagecode; Message Q_data; list Byte acks; int LEN): "java:CCcom.Communication.send2|../";
+func list[msgLen+19] Byte ext_receive2(real t; int LEN): "java:CCcom.Communication.receive2|../";
+func tuple(Byte I_nr, I_mc; Message message; list[0..15] Byte acks) receive2(Byte I_nr, I_mc; Message message):
+  list[msgLen+19] Byte data = ext_receive2(0.0, msgLen);
+  list[0..15] Byte acks = [];
+  int i = 0;
+  if data[0] = 0:
+    return (I_nr, I_mc, message, acks);
+  else
+    while i < data[msgLen+3]:
+      acks := acks + [data[i + msgLen+4]];
+      i := i + 1;
+    end
+    return (data[1], data[2], data[3:msgLen+3], acks);
+  end
+end
+
+automaton def Ext_Receiver(alg Byte Q_nr, Q_mc; alg Message Q_data; alg list Byte Q_acks):
+  event e_receive, e_ack;
+  uncontrollable u_sent;
+  disc Byte Q_nr_old;
+  disc Byte I_nr, I_mc, I_ack;
+  disc Message I_data;
+  disc bool sent = false;
+  disc list Byte I_acks;
+  cont t der 1, t2 der 1;
+  location:
+    initial;
+    edge e_receive when t > 0.5 do t := 0, (I_nr, I_mc, I_data, I_acks) := receive2(I_nr, I_mc, I_data);
+    edge e_ack when I_acks != [] and t2 > 0 do (I_ack, I_acks) := pop(I_acks), t2 := 0;
+    edge u_sent when Q_nr_old != Q_nr do Q_nr_old := Q_nr,
+        sent := send2(Q_nr, Q_mc, Q_data, Q_acks, msgLen);
+end
+
+group def Button(alg string comp, name; event e_press; alg bool cond):
+  automaton State:
+    event e_double;
+    location:
+      initial;
+      edge e_double;
+  end
+  svgin id comp + name  event if not cond : e_press else State.e_double end;
+  svgout id comp + "Rect" + name attr "fill" value if cond: "lightgray" else "none" end;
+end
+
+group def Button2(alg string comp, name; event e_press, e_press2; alg bool cond):
+  svgin id comp + name  event if not cond : e_press else e_press2 end;
+  svgout id comp + "Rect" + name attr "fill" value if cond: "lightgray" else "none" end;
+end

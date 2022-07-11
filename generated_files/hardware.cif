@@ -1,0 +1,559 @@
+import "constants.cif";
+group OS1:
+  input bool existingLegendOPA;
+  input bool existingLegendAID;
+  input bool withinSpeedLimitOPA;
+  input bool withinSpeedLimitAID;
+  input bool noIllegalCombinations;
+  group State:
+    uncontrollable u_idle;
+    uncontrollable u_local;
+    uncontrollable u_online;
+    input bool idle;
+  end
+  plant SendTrigger:
+    event e_sent;
+    disc bool done = false;
+    location idle:
+      initial;
+      edge Commands.Inc_MSIOPA.c_answer, Commands.MSIOPA.c_accept, Commands.MSIOPA.c_reject, Commands.Inc_MSIAID.c_answer, Commands.MSIAID.c_accept, Commands.MSIAID.c_reject, Commands.OS.c_answer, Commands.OS.c_accept, Commands.DetOPA.c_answer, Commands.DetOPA.c_accept, Commands.DetLGD.c_answer, Commands.DetLGD.c_accept, Commands.Intensity.c_answer, Commands.Intensity.c_accept, Commands.VMaxDyn.c_answer, Commands.VMaxDyn.c_accept, Requests.LGDState.c_send, Requests.MSIState.c_send, Requests.MSIShown.c_send, Requests.MUSState.c_send, Requests.DetState.c_send, Requests.OSStatus.c_send, Requests.SpeedInt.c_send, Requests.Vehicle.c_send, Requests.Version.c_send, Requests.OSState.c_send, Requests.AID.c_send, Requests.MUSTest.c_send, Autonomous.LGDState.c_send, Autonomous.MSIState.c_send, Autonomous.MSIShown.c_send, Autonomous.MUSState.c_send, Autonomous.DetState.c_send, Autonomous.OSStatus.c_send, Autonomous.OSState.c_send, Autonomous.AID.c_send, Autonomous.MUSTest.c_send goto busy;
+    location busy:
+      edge e_sent goto idle;
+//       edge e_sent when done do done := false goto idle;
+  end
+  plant HW:
+    disc Byte nr = 0;
+    input Byte I_nr;
+    input Byte I_mc;
+    input list[18] Byte I_data;
+    input Byte I_ack;
+    disc Byte Q_nr = 0;
+    disc Byte Q_mc = 0;
+    disc list[18] Byte Q_data = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    location:
+      initial;
+      edge State.u_online when Commands.OS.data1 = 1;
+      edge State.u_local when Commands.OS.data1 = 2;
+      edge State.u_idle when Commands.OS.data1 = 3;
+      edge Commands.Inc_MSIOPA.u_command when nr != I_nr and I_mc = 96 do nr := I_nr;
+      edge Commands.Inc_MSIOPA.c_answer do Q_nr := (Q_nr + 1) mod 256, Q_mc := 3 * 32 + 0, Q_data := [1, if Commands.Inc_MSIOPA.newdata1 = BLANK or Commands.Inc_MSIOPA.newdata1 = ENDOFRESTRICTIONS: 255 elif Commands.Inc_MSIOPA.newdata1 = GREENARROW or Commands.Inc_MSIOPA.newdata1 = LEFTARROW or Commands.Inc_MSIOPA.newdata1 = RIGHTARROW or Commands.Inc_MSIOPA.newdata1 = CROSS: 2 elif Commands.Inc_MSIOPA.newdata1 = SPEED130 or Commands.Inc_MSIOPA.newdata1 = SPEED120 or Commands.Inc_MSIOPA.newdata1 = SPEED110 or Commands.Inc_MSIOPA.newdata1 = SPEED100 or Commands.Inc_MSIOPA.newdata1 = SPEED90 or Commands.Inc_MSIOPA.newdata1 = SPEED80 or Commands.Inc_MSIOPA.newdata1 = SPEED70 or Commands.Inc_MSIOPA.newdata1 = SPEED60 or Commands.Inc_MSIOPA.newdata1 = SPEED50 or Commands.Inc_MSIOPA.newdata1 = SPEED40 or Commands.Inc_MSIOPA.newdata1 = SPEED30: 1 else 0 end, 0, if Commands.Inc_MSIOPA.newdata1 = BLANK or Commands.Inc_MSIOPA.newdata1 = LEFTARROW: 1 elif Commands.Inc_MSIOPA.newdata1 = ENDOFRESTRICTIONS or Commands.Inc_MSIOPA.newdata1 = RIGHTARROW: 2 elif Commands.Inc_MSIOPA.newdata1 = GREENARROW: 3 elif Commands.Inc_MSIOPA.newdata1 = SPEED130: 130 elif Commands.Inc_MSIOPA.newdata1 = SPEED120: 120 elif Commands.Inc_MSIOPA.newdata1 = SPEED110: 110 elif Commands.Inc_MSIOPA.newdata1 = SPEED100: 100 elif Commands.Inc_MSIOPA.newdata1 = SPEED90: 90 elif Commands.Inc_MSIOPA.newdata1 = SPEED80: 80 elif Commands.Inc_MSIOPA.newdata1 = SPEED70: 70 elif Commands.Inc_MSIOPA.newdata1 = SPEED60: 60 elif Commands.Inc_MSIOPA.newdata1 = SPEED50: 50 elif Commands.Inc_MSIOPA.newdata1 = SPEED40: 40 elif Commands.Inc_MSIOPA.newdata1 = SPEED30: 30 elif Commands.Inc_MSIOPA.newdata1 = CROSS: 4 else 0 end, if Commands.Inc_MSIOPA.newdata2 = BASIC: 1 elif Commands.Inc_MSIOPA.newdata2 = FLASHERS: 2 elif Commands.Inc_MSIOPA.newdata2 = REDRING: 3 else 0 end, 2, if Commands.Inc_MSIOPA.newdata3 = BLANK or Commands.Inc_MSIOPA.newdata3 = ENDOFRESTRICTIONS: 255 elif Commands.Inc_MSIOPA.newdata3 = GREENARROW or Commands.Inc_MSIOPA.newdata3 = LEFTARROW or Commands.Inc_MSIOPA.newdata3 = RIGHTARROW or Commands.Inc_MSIOPA.newdata3 = CROSS: 2 elif Commands.Inc_MSIOPA.newdata3 = SPEED130 or Commands.Inc_MSIOPA.newdata3 = SPEED120 or Commands.Inc_MSIOPA.newdata3 = SPEED110 or Commands.Inc_MSIOPA.newdata3 = SPEED100 or Commands.Inc_MSIOPA.newdata3 = SPEED90 or Commands.Inc_MSIOPA.newdata3 = SPEED80 or Commands.Inc_MSIOPA.newdata3 = SPEED70 or Commands.Inc_MSIOPA.newdata3 = SPEED60 or Commands.Inc_MSIOPA.newdata3 = SPEED50 or Commands.Inc_MSIOPA.newdata3 = SPEED40 or Commands.Inc_MSIOPA.newdata3 = SPEED30: 1 else 0 end, 0, if Commands.Inc_MSIOPA.newdata3 = BLANK or Commands.Inc_MSIOPA.newdata3 = LEFTARROW: 1 elif Commands.Inc_MSIOPA.newdata3 = ENDOFRESTRICTIONS or Commands.Inc_MSIOPA.newdata3 = RIGHTARROW: 2 elif Commands.Inc_MSIOPA.newdata3 = GREENARROW: 3 elif Commands.Inc_MSIOPA.newdata3 = SPEED130: 130 elif Commands.Inc_MSIOPA.newdata3 = SPEED120: 120 elif Commands.Inc_MSIOPA.newdata3 = SPEED110: 110 elif Commands.Inc_MSIOPA.newdata3 = SPEED100: 100 elif Commands.Inc_MSIOPA.newdata3 = SPEED90: 90 elif Commands.Inc_MSIOPA.newdata3 = SPEED80: 80 elif Commands.Inc_MSIOPA.newdata3 = SPEED70: 70 elif Commands.Inc_MSIOPA.newdata3 = SPEED60: 60 elif Commands.Inc_MSIOPA.newdata3 = SPEED50: 50 elif Commands.Inc_MSIOPA.newdata3 = SPEED40: 40 elif Commands.Inc_MSIOPA.newdata3 = SPEED30: 30 elif Commands.Inc_MSIOPA.newdata3 = CROSS: 4 else 0 end, if Commands.Inc_MSIOPA.newdata4 = BASIC: 1 elif Commands.Inc_MSIOPA.newdata4 = FLASHERS: 2 elif Commands.Inc_MSIOPA.newdata4 = REDRING: 3 else 0 end, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Commands.MSIOPA.u_confirm when nr != I_nr and I_mc = 160 do nr := I_nr;
+      edge Commands.MSIOPA.c_accept do Q_nr := (Q_nr + 1) mod 256, Q_mc := 5 * 32 + 0, Q_data := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Commands.MSIOPA.c_reject do Q_nr := (Q_nr + 1) mod 256, Q_mc := 5 * 32 + 0, Q_data := [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Commands.Inc_MSIAID.u_command when nr != I_nr and I_mc = 97 do nr := I_nr;
+      edge Commands.Inc_MSIAID.c_answer do Q_nr := (Q_nr + 1) mod 256, Q_mc := 3 * 32 + 1, Q_data := [1, if Commands.Inc_MSIAID.newdata1 = BLANK or Commands.Inc_MSIAID.newdata1 = ENDOFRESTRICTIONS: 255 elif Commands.Inc_MSIAID.newdata1 = GREENARROW or Commands.Inc_MSIAID.newdata1 = LEFTARROW or Commands.Inc_MSIAID.newdata1 = RIGHTARROW or Commands.Inc_MSIAID.newdata1 = CROSS: 2 elif Commands.Inc_MSIAID.newdata1 = SPEED130 or Commands.Inc_MSIAID.newdata1 = SPEED120 or Commands.Inc_MSIAID.newdata1 = SPEED110 or Commands.Inc_MSIAID.newdata1 = SPEED100 or Commands.Inc_MSIAID.newdata1 = SPEED90 or Commands.Inc_MSIAID.newdata1 = SPEED80 or Commands.Inc_MSIAID.newdata1 = SPEED70 or Commands.Inc_MSIAID.newdata1 = SPEED60 or Commands.Inc_MSIAID.newdata1 = SPEED50 or Commands.Inc_MSIAID.newdata1 = SPEED40 or Commands.Inc_MSIAID.newdata1 = SPEED30: 1 else 0 end, 0, if Commands.Inc_MSIAID.newdata1 = BLANK or Commands.Inc_MSIAID.newdata1 = LEFTARROW: 1 elif Commands.Inc_MSIAID.newdata1 = ENDOFRESTRICTIONS or Commands.Inc_MSIAID.newdata1 = RIGHTARROW: 2 elif Commands.Inc_MSIAID.newdata1 = GREENARROW: 3 elif Commands.Inc_MSIAID.newdata1 = SPEED130: 130 elif Commands.Inc_MSIAID.newdata1 = SPEED120: 120 elif Commands.Inc_MSIAID.newdata1 = SPEED110: 110 elif Commands.Inc_MSIAID.newdata1 = SPEED100: 100 elif Commands.Inc_MSIAID.newdata1 = SPEED90: 90 elif Commands.Inc_MSIAID.newdata1 = SPEED80: 80 elif Commands.Inc_MSIAID.newdata1 = SPEED70: 70 elif Commands.Inc_MSIAID.newdata1 = SPEED60: 60 elif Commands.Inc_MSIAID.newdata1 = SPEED50: 50 elif Commands.Inc_MSIAID.newdata1 = SPEED40: 40 elif Commands.Inc_MSIAID.newdata1 = SPEED30: 30 elif Commands.Inc_MSIAID.newdata1 = CROSS: 4 else 0 end, if Commands.Inc_MSIAID.newdata2 = BASIC: 1 elif Commands.Inc_MSIAID.newdata2 = FLASHERS: 2 elif Commands.Inc_MSIAID.newdata2 = REDRING: 3 else 0 end, 2, if Commands.Inc_MSIAID.newdata3 = BLANK or Commands.Inc_MSIAID.newdata3 = ENDOFRESTRICTIONS: 255 elif Commands.Inc_MSIAID.newdata3 = GREENARROW or Commands.Inc_MSIAID.newdata3 = LEFTARROW or Commands.Inc_MSIAID.newdata3 = RIGHTARROW or Commands.Inc_MSIAID.newdata3 = CROSS: 2 elif Commands.Inc_MSIAID.newdata3 = SPEED130 or Commands.Inc_MSIAID.newdata3 = SPEED120 or Commands.Inc_MSIAID.newdata3 = SPEED110 or Commands.Inc_MSIAID.newdata3 = SPEED100 or Commands.Inc_MSIAID.newdata3 = SPEED90 or Commands.Inc_MSIAID.newdata3 = SPEED80 or Commands.Inc_MSIAID.newdata3 = SPEED70 or Commands.Inc_MSIAID.newdata3 = SPEED60 or Commands.Inc_MSIAID.newdata3 = SPEED50 or Commands.Inc_MSIAID.newdata3 = SPEED40 or Commands.Inc_MSIAID.newdata3 = SPEED30: 1 else 0 end, 0, if Commands.Inc_MSIAID.newdata3 = BLANK or Commands.Inc_MSIAID.newdata3 = LEFTARROW: 1 elif Commands.Inc_MSIAID.newdata3 = ENDOFRESTRICTIONS or Commands.Inc_MSIAID.newdata3 = RIGHTARROW: 2 elif Commands.Inc_MSIAID.newdata3 = GREENARROW: 3 elif Commands.Inc_MSIAID.newdata3 = SPEED130: 130 elif Commands.Inc_MSIAID.newdata3 = SPEED120: 120 elif Commands.Inc_MSIAID.newdata3 = SPEED110: 110 elif Commands.Inc_MSIAID.newdata3 = SPEED100: 100 elif Commands.Inc_MSIAID.newdata3 = SPEED90: 90 elif Commands.Inc_MSIAID.newdata3 = SPEED80: 80 elif Commands.Inc_MSIAID.newdata3 = SPEED70: 70 elif Commands.Inc_MSIAID.newdata3 = SPEED60: 60 elif Commands.Inc_MSIAID.newdata3 = SPEED50: 50 elif Commands.Inc_MSIAID.newdata3 = SPEED40: 40 elif Commands.Inc_MSIAID.newdata3 = SPEED30: 30 elif Commands.Inc_MSIAID.newdata3 = CROSS: 4 else 0 end, if Commands.Inc_MSIAID.newdata4 = BASIC: 1 elif Commands.Inc_MSIAID.newdata4 = FLASHERS: 2 elif Commands.Inc_MSIAID.newdata4 = REDRING: 3 else 0 end, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Commands.MSIAID.u_confirm when nr != I_nr and I_mc = 161 do nr := I_nr;
+      edge Commands.MSIAID.c_accept do Q_nr := (Q_nr + 1) mod 256, Q_mc := 5 * 32 + 1, Q_data := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Commands.MSIAID.c_reject do Q_nr := (Q_nr + 1) mod 256, Q_mc := 5 * 32 + 1, Q_data := [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Commands.OS.u_command when nr != I_nr and I_mc = 98 do nr := I_nr;
+      edge Commands.OS.c_answer do Q_nr := (Q_nr + 1) mod 256, Q_mc := 3 * 32 + 2, Q_data := [Commands.OS.newdata1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Commands.OS.u_confirm when nr != I_nr and I_mc = 162 do nr := I_nr;
+      edge Commands.OS.c_accept do Q_nr := (Q_nr + 1) mod 256, Q_mc := 5 * 32 + 2, Q_data := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Commands.DetOPA.u_command when nr != I_nr and I_mc = 99 do nr := I_nr;
+      edge Commands.DetOPA.c_answer do Q_nr := (Q_nr + 1) mod 256, Q_mc := 3 * 32 + 3, Q_data := [(if Commands.DetOPA.newdata1: 0 else 128 end) + (if Commands.DetOPA.newdata2: 0 else 64 end), (if Commands.DetOPA.newdata3: 0 else 128 end) + (if Commands.DetOPA.newdata4: 0 else 64 end), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Commands.DetOPA.u_confirm when nr != I_nr and I_mc = 163 do nr := I_nr;
+      edge Commands.DetOPA.c_accept do Q_nr := (Q_nr + 1) mod 256, Q_mc := 5 * 32 + 3, Q_data := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Commands.DetLGD.u_command when nr != I_nr and I_mc = 100 do nr := I_nr;
+      edge Commands.DetLGD.c_answer do Q_nr := (Q_nr + 1) mod 256, Q_mc := 3 * 32 + 4, Q_data := [(if Commands.DetLGD.newdata1: 0 else 128 end) + (if Commands.DetLGD.newdata2: 0 else 64 end), (if Commands.DetLGD.newdata3: 0 else 128 end) + (if Commands.DetLGD.newdata4: 0 else 64 end), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Commands.DetLGD.u_confirm when nr != I_nr and I_mc = 164 do nr := I_nr;
+      edge Commands.DetLGD.c_accept do Q_nr := (Q_nr + 1) mod 256, Q_mc := 5 * 32 + 4, Q_data := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Commands.Intensity.u_command when nr != I_nr and I_mc = 101 do nr := I_nr;
+      edge Commands.Intensity.c_answer do Q_nr := (Q_nr + 1) mod 256, Q_mc := 3 * 32 + 5, Q_data := [if Commands.Intensity.newdata1: 0 else 1 end, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Commands.Intensity.u_confirm when nr != I_nr and I_mc = 165 do nr := I_nr;
+      edge Commands.Intensity.c_accept do Q_nr := (Q_nr + 1) mod 256, Q_mc := 5 * 32 + 5, Q_data := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Commands.VMaxDyn.u_command when nr != I_nr and I_mc = 105 do nr := I_nr;
+      edge Commands.VMaxDyn.c_answer do Q_nr := (Q_nr + 1) mod 256, Q_mc := 3 * 32 + 9, Q_data := [Commands.VMaxDyn.newdata1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Commands.VMaxDyn.u_confirm when nr != I_nr and I_mc = 169 do nr := I_nr;
+      edge Commands.VMaxDyn.c_accept do Q_nr := (Q_nr + 1) mod 256, Q_mc := 5 * 32 + 9, Q_data := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Requests.LGDState.u_request when nr != I_nr and I_mc = 128 do nr := I_nr;
+      edge Requests.LGDState.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 4 * 32 + 0, Q_data := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Requests.MSIState.u_request when nr != I_nr and I_mc = 129 do nr := I_nr;
+      edge Requests.MSIState.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 4 * 32 + 1, Q_data := [1, MSIRow.MSI1.Monitor.FSO, MSIRow.MSI1.HW.I_FFS, MSIRow.MSI1.HW.I_WS, 2, MSIRow.MSI2.Monitor.FSO, MSIRow.MSI2.HW.I_FFS, MSIRow.MSI2.HW.I_WS, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Requests.MSIShown.u_request when nr != I_nr and I_mc = 130 do nr := I_nr;
+      edge Requests.MSIShown.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 4 * 32 + 2, Q_data := [MSIRow.Monitor.state, 1, MSIRow.MSI1.HW.Q_groupCode, MSIRow.MSI1.HW.Q_legendCode div 256, MSIRow.MSI1.HW.Q_legendCode mod 256, MSIRow.MSI1.HW.Q_variationCode, 2, MSIRow.MSI2.HW.Q_groupCode, MSIRow.MSI2.HW.Q_legendCode div 256, MSIRow.MSI2.HW.Q_legendCode mod 256, MSIRow.MSI2.HW.Q_variationCode, 0, 0, 0, 0, 0, 0, 0];
+      edge Requests.MUSState.u_request when nr != I_nr and I_mc = 131 do nr := I_nr;
+      edge Requests.MUSState.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 4 * 32 + 3, Q_data := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Requests.DetState.u_request when nr != I_nr and I_mc = 132 do nr := I_nr;
+      edge Requests.DetState.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 4 * 32 + 4, Q_data := [0, DetectorRow1.Detector1.Monitor.data * 16 + DetectorRow1.Detector2.Monitor.data, DetectorRow2.Detector1.Monitor.data * 16 + DetectorRow2.Detector2.Monitor.data, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Requests.OSStatus.u_request when nr != I_nr and I_mc = 133 do nr := I_nr;
+      edge Requests.OSStatus.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 4 * 32 + 5, Q_data := [5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Requests.SpeedInt.u_request when nr != I_nr and I_mc = 134 do nr := I_nr;
+      edge Requests.SpeedInt.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 4 * 32 + 6, Q_data := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Requests.Vehicle.u_request when nr != I_nr and I_mc = 135 do nr := I_nr;
+      edge Requests.Vehicle.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 4 * 32 + 7, Q_data := [if not DetectorRow1.Detector1.laneInUse: 253 elif not DetectorRow1.Detector1.Functioning.ok: 254 else DetectorRow1.Detector1.IncidentCalculation.Vcor end, if not DetectorRow1.Detector2.laneInUse: 253 elif not DetectorRow1.Detector2.Functioning.ok: 254 else DetectorRow1.Detector2.IncidentCalculation.Vcor end, if not DetectorRow2.Detector1.laneInUse: 253 elif not DetectorRow2.Detector1.Functioning.ok: 254 else DetectorRow2.Detector1.IncidentCalculation.Vcor end, if not DetectorRow2.Detector2.laneInUse: 253 elif not DetectorRow2.Detector2.Functioning.ok: 254 else DetectorRow2.Detector2.IncidentCalculation.Vcor end, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Requests.Version.u_request when nr != I_nr and I_mc = 136 do nr := I_nr;
+      edge Requests.Version.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 4 * 32 + 8, Q_data := [18, 52, 86, 120, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Requests.OSState.u_request when nr != I_nr and I_mc = 137 do nr := I_nr;
+      edge Requests.OSState.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 4 * 32 + 9, Q_data := [Commands.OS.data1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Requests.AID.u_request when nr != I_nr and I_mc = 138 do nr := I_nr;
+      edge Requests.AID.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 4 * 32 + 10, Q_data := [if AIDLocation.recommendation1 = SPEED130: 130 elif AIDLocation.recommendation1 = SPEED120: 120 elif AIDLocation.recommendation1 = SPEED110: 110 elif AIDLocation.recommendation1 = SPEED100: 100 elif AIDLocation.recommendation1 = SPEED90: 90 elif AIDLocation.recommendation1 = SPEED80: 80 elif AIDLocation.recommendation1 = SPEED70: 70 elif AIDLocation.recommendation1 = SPEED60: 60 elif AIDLocation.recommendation1 = SPEED50: 50 elif AIDLocation.recommendation1 = SPEED40: 40 elif AIDLocation.recommendation1 = SPEED30: 30 else 0 end, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Requests.MUSTest.u_request when nr != I_nr and I_mc = 139 do nr := I_nr;
+      edge Requests.MUSTest.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 4 * 32 + 11, Q_data := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Autonomous.LGDState.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 2 * 32 + 0, Q_data := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Autonomous.MSIState.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 2 * 32 + 1, Q_data := [1, MSIRow.MSI1.Monitor.FSO, MSIRow.MSI1.HW.I_FFS, MSIRow.MSI1.HW.I_WS, 2, MSIRow.MSI2.Monitor.FSO, MSIRow.MSI2.HW.I_FFS, MSIRow.MSI2.HW.I_WS, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Autonomous.MSIShown.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 2 * 32 + 2, Q_data := [MSIRow.Monitor.state, 1, MSIRow.MSI1.HW.Q_groupCode, MSIRow.MSI1.HW.Q_legendCode div 256, MSIRow.MSI1.HW.Q_legendCode mod 256, MSIRow.MSI1.HW.Q_variationCode, 2, MSIRow.MSI2.HW.Q_groupCode, MSIRow.MSI2.HW.Q_legendCode div 256, MSIRow.MSI2.HW.Q_legendCode mod 256, MSIRow.MSI2.HW.Q_variationCode, 0, 0, 0, 0, 0, 0, 0];
+      edge Autonomous.MUSState.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 2 * 32 + 3, Q_data := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Autonomous.DetState.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 2 * 32 + 4, Q_data := [0, DetectorRow1.Detector1.Monitor.data * 16 + DetectorRow1.Detector2.Monitor.data, DetectorRow2.Detector1.Monitor.data * 16 + DetectorRow2.Detector2.Monitor.data, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Autonomous.OSStatus.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 2 * 32 + 5, Q_data := [5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Autonomous.OSState.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 2 * 32 + 9, Q_data := [Commands.OS.data1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Autonomous.AID.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 2 * 32 + 10, Q_data := [if AIDLocation.recommendation1 = SPEED130: 130 elif AIDLocation.recommendation1 = SPEED120: 120 elif AIDLocation.recommendation1 = SPEED110: 110 elif AIDLocation.recommendation1 = SPEED100: 100 elif AIDLocation.recommendation1 = SPEED90: 90 elif AIDLocation.recommendation1 = SPEED80: 80 elif AIDLocation.recommendation1 = SPEED70: 70 elif AIDLocation.recommendation1 = SPEED60: 60 elif AIDLocation.recommendation1 = SPEED50: 50 elif AIDLocation.recommendation1 = SPEED40: 40 elif AIDLocation.recommendation1 = SPEED30: 30 else 0 end, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      edge Autonomous.MUSTest.c_send do Q_nr := (Q_nr + 1) mod 256, Q_mc := 2 * 32 + 11, Q_data := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  end
+  plant Acknowledgement:
+    disc list[15] Byte buffer = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    disc int[0..15] pos = 0;
+    location:
+      initial;
+      edge SendTrigger.e_sent do pos := 0;
+      edge Commands.Inc_MSIOPA.u_command, Commands.MSIOPA.u_confirm, Commands.Inc_MSIAID.u_command, Commands.MSIAID.u_confirm, Commands.OS.u_command, Commands.OS.u_confirm, Commands.DetOPA.u_command, Commands.DetOPA.u_confirm, Commands.DetLGD.u_command, Commands.DetLGD.u_confirm, Commands.Intensity.u_command, Commands.Intensity.u_confirm, Commands.VMaxDyn.u_command, Commands.VMaxDyn.u_confirm, Requests.LGDState.u_request, Requests.MSIState.u_request, Requests.MSIShown.u_request, Requests.MUSState.u_request, Requests.DetState.u_request, Requests.OSStatus.u_request, Requests.SpeedInt.u_request, Requests.Vehicle.u_request, Requests.Version.u_request, Requests.OSState.u_request, Requests.AID.u_request, Requests.MUSTest.u_request do buffer[pos] := HW.I_nr, pos := pos + 1;
+  end
+  group AIDLocation:
+    input Legend recommendation1;
+  end
+  group MSIRow:
+    input bool inUse;
+    group RowUsage:
+      controllable c_on;
+    end
+    group TimeSync:
+      input bool ts;
+    end
+    group Requested:
+      input Variation variation1;
+      input Variation variation2;
+    end
+    group MSI1:
+      controllable c_speed50;
+      controllable c_speed70;
+      controllable c_speed90;
+      controllable c_speed100;
+      controllable c_rightArrow;
+      controllable c_cross;
+      controllable c_blank;
+      controllable c_noSign;
+      input Legend requested;
+      group Functioning:
+        uncontrollable u_defect;
+        uncontrollable u_degraded;
+        uncontrollable u_ok;
+        input bool ok;
+        input bool degraded;
+      end
+      group VariationCode:
+        controllable c_basic;
+        controllable c_flashers;
+        controllable c_redRing;
+      end
+      group StateAccordingToOS:
+        uncontrollable u_ok;
+        uncontrollable u_fatal;
+        uncontrollable u_noCommunication;
+        uncontrollable u_outsideOfSpec;
+      end
+      group Monitor:
+        input Byte FSO;
+      end
+      plant HW:
+        event e_invert;
+        event e_reset;
+        monitor RowUsage.c_on;
+        disc bool Q_LB = false;
+        disc bool Q_RS = false;
+        alg bool Q_SA = inUse;
+        alg bool Q_TS = TimeSync.ts;
+        alg int[0..7] Q_LS = if Commands.Intensity.data1: 7 else 4 end;
+        disc Byte Q_groupCode = 0;
+        disc Word Q_legendCode = 0;
+        disc Byte Q_variationCode = 1;
+        input bool I_LB_ret;
+        input bool I_TS_ret;
+        input Byte I_FFS;
+        input Byte I_WS;
+        input Byte I_groupCode;
+        input Word I_legendCode;
+        input Byte I_variationCode;
+        input Byte I_state;
+        input int[0..7] I_LS_ret;
+        cont t_LB der 1.0;
+        cont t_RS der 1.0;
+        location:
+          initial;
+          edge c_speed50 do Q_groupCode := 1, Q_legendCode := 50;
+          edge c_speed70 do Q_groupCode := 1, Q_legendCode := 70;
+          edge c_speed90 do Q_groupCode := 1, Q_legendCode := 90;
+          edge c_speed100 do Q_groupCode := 1, Q_legendCode := 100;
+          edge c_rightArrow do Q_groupCode := 2, Q_legendCode := 2;
+          edge c_cross do Q_groupCode := 2, Q_legendCode := 4;
+          edge c_blank do Q_groupCode := 255, Q_legendCode := 1;
+          edge c_noSign do Q_groupCode := 0, Q_legendCode := 0;
+          edge VariationCode.c_basic do Q_variationCode := 1;
+          edge VariationCode.c_flashers do Q_variationCode := 2;
+          edge VariationCode.c_redRing do Q_variationCode := 3;
+          edge e_invert when Q_LB != I_LB_ret and t_LB >= 1.0 do Q_LB := I_LB_ret, t_LB := 0.0;
+          edge e_invert when Q_LB = I_LB_ret and t_LB >= 1.0 do t_LB := 0.0;
+          edge RowUsage.c_on when I_state div 16 = 15 do Q_RS := true, t_RS := 0.0;
+          edge e_reset when t_RS >= 6.0 and Q_RS do Q_RS := false;
+          edge Functioning.u_degraded when I_WS != 0 and I_FFS = 0;
+          edge Functioning.u_defect when I_FFS != 0;
+          edge Functioning.u_ok when I_WS = 0 and I_FFS = 0;
+          edge StateAccordingToOS.u_ok when I_state div 16 != 2 and I_state div 16 != 15 and I_FFS = 0;
+          edge StateAccordingToOS.u_outsideOfSpec when false;
+          edge StateAccordingToOS.u_noCommunication when false;
+          edge StateAccordingToOS.u_fatal when I_FFS != 0 or I_state div 16 = 15;
+      end
+    end
+    group MSI2:
+      controllable c_speed50;
+      controllable c_speed70;
+      controllable c_speed90;
+      controllable c_speed100;
+      controllable c_leftArrow;
+      controllable c_cross;
+      controllable c_blank;
+      controllable c_noSign;
+      input Legend requested;
+      group Functioning:
+        uncontrollable u_defect;
+        uncontrollable u_degraded;
+        uncontrollable u_ok;
+        input bool ok;
+        input bool degraded;
+      end
+      group VariationCode:
+        controllable c_basic;
+        controllable c_flashers;
+        controllable c_redRing;
+      end
+      group StateAccordingToOS:
+        uncontrollable u_ok;
+        uncontrollable u_fatal;
+        uncontrollable u_noCommunication;
+        uncontrollable u_outsideOfSpec;
+      end
+      group Monitor:
+        input Byte FSO;
+      end
+      plant HW:
+        event e_invert;
+        event e_reset;
+        monitor RowUsage.c_on;
+        disc bool Q_LB = false;
+        disc bool Q_RS = false;
+        alg bool Q_SA = inUse;
+        alg bool Q_TS = TimeSync.ts;
+        alg int[0..7] Q_LS = if Commands.Intensity.data1: 7 else 4 end;
+        disc Byte Q_groupCode = 0;
+        disc Word Q_legendCode = 0;
+        disc Byte Q_variationCode = 1;
+        input bool I_LB_ret;
+        input bool I_TS_ret;
+        input Byte I_FFS;
+        input Byte I_WS;
+        input Byte I_groupCode;
+        input Word I_legendCode;
+        input Byte I_variationCode;
+        input Byte I_state;
+        input int[0..7] I_LS_ret;
+        cont t_LB der 1.0;
+        cont t_RS der 1.0;
+        location:
+          initial;
+          edge c_speed50 do Q_groupCode := 1, Q_legendCode := 50;
+          edge c_speed70 do Q_groupCode := 1, Q_legendCode := 70;
+          edge c_speed90 do Q_groupCode := 1, Q_legendCode := 90;
+          edge c_speed100 do Q_groupCode := 1, Q_legendCode := 100;
+          edge c_leftArrow do Q_groupCode := 2, Q_legendCode := 1;
+          edge c_cross do Q_groupCode := 2, Q_legendCode := 4;
+          edge c_blank do Q_groupCode := 255, Q_legendCode := 1;
+          edge c_noSign do Q_groupCode := 0, Q_legendCode := 0;
+          edge VariationCode.c_basic do Q_variationCode := 1;
+          edge VariationCode.c_flashers do Q_variationCode := 2;
+          edge VariationCode.c_redRing do Q_variationCode := 3;
+          edge e_invert when Q_LB != I_LB_ret and t_LB >= 1.0 do Q_LB := I_LB_ret, t_LB := 0.0;
+          edge e_invert when Q_LB = I_LB_ret and t_LB >= 1.0 do t_LB := 0.0;
+          edge RowUsage.c_on when I_state div 16 = 15 do Q_RS := true, t_RS := 0.0;
+          edge e_reset when t_RS >= 6.0 and Q_RS do Q_RS := false;
+          edge Functioning.u_degraded when I_WS != 0 and I_FFS = 0;
+          edge Functioning.u_defect when I_FFS != 0;
+          edge Functioning.u_ok when I_WS = 0 and I_FFS = 0;
+          edge StateAccordingToOS.u_ok when I_state div 16 != 2 and I_state div 16 != 15 and I_FFS = 0;
+          edge StateAccordingToOS.u_outsideOfSpec when false;
+          edge StateAccordingToOS.u_noCommunication when false;
+          edge StateAccordingToOS.u_fatal when I_FFS != 0 or I_state div 16 = 15;
+      end
+    end
+    group Monitor:
+      input Byte state;
+    end
+  end
+  group Commands:
+    group MSIOPA:
+      uncontrollable u_confirm;
+      controllable c_accept;
+      controllable c_reject;
+    end
+    group Inc_MSIOPA:
+      uncontrollable u_command;
+      controllable c_answer;
+      input Legend newdata1;
+      input Variation newdata2;
+      input Legend newdata3;
+      input Variation newdata4;
+    end
+    group MSIAID:
+      uncontrollable u_confirm;
+      controllable c_accept;
+      controllable c_reject;
+    end
+    group Inc_MSIAID:
+      uncontrollable u_command;
+      controllable c_answer;
+      input Legend newdata1;
+      input Variation newdata2;
+      input Legend newdata3;
+      input Variation newdata4;
+    end
+    group OS:
+      controllable c_accept;
+      controllable c_answer;
+      uncontrollable u_command;
+      uncontrollable u_confirm;
+      input Byte data1;
+      input Byte newdata1;
+    end
+    group DetOPA:
+      controllable c_accept;
+      controllable c_answer;
+      uncontrollable u_command;
+      uncontrollable u_confirm;
+      input bool newdata1;
+      input bool newdata2;
+      input bool newdata3;
+      input bool newdata4;
+    end
+    group DetLGD:
+      controllable c_accept;
+      controllable c_answer;
+      uncontrollable u_command;
+      uncontrollable u_confirm;
+      input bool newdata1;
+      input bool newdata2;
+      input bool newdata3;
+      input bool newdata4;
+    end
+    group Intensity:
+      controllable c_accept;
+      controllable c_answer;
+      uncontrollable u_command;
+      uncontrollable u_confirm;
+      input bool data1;
+      input bool newdata1;
+    end
+    group VMaxDyn:
+      controllable c_accept;
+      controllable c_answer;
+      uncontrollable u_command;
+      uncontrollable u_confirm;
+      input Byte newdata1;
+    end
+  end
+  group Requests:
+    group LGDState:
+      uncontrollable u_request;
+      controllable c_send;
+    end
+    group MSIState:
+      uncontrollable u_request;
+      controllable c_send;
+    end
+    group MSIShown:
+      uncontrollable u_request;
+      controllable c_send;
+    end
+    group MUSState:
+      uncontrollable u_request;
+      controllable c_send;
+    end
+    group DetState:
+      uncontrollable u_request;
+      controllable c_send;
+    end
+    group OSStatus:
+      uncontrollable u_request;
+      controllable c_send;
+    end
+    group SpeedInt:
+      uncontrollable u_request;
+      controllable c_send;
+    end
+    group Vehicle:
+      uncontrollable u_request;
+      controllable c_send;
+    end
+    group Version:
+      uncontrollable u_request;
+      controllable c_send;
+    end
+    group OSState:
+      uncontrollable u_request;
+      controllable c_send;
+    end
+    group AID:
+      uncontrollable u_request;
+      controllable c_send;
+    end
+    group MUSTest:
+      uncontrollable u_request;
+      controllable c_send;
+    end
+  end
+  group Autonomous:
+    group LGDState:
+      controllable c_send;
+    end
+    group MSIState:
+      controllable c_send;
+    end
+    group MSIShown:
+      controllable c_send;
+    end
+    group MUSState:
+      controllable c_send;
+    end
+    group DetState:
+      controllable c_send;
+    end
+    group OSStatus:
+      controllable c_send;
+    end
+    group OSState:
+      controllable c_send;
+    end
+    group AID:
+      controllable c_send;
+    end
+    group MUSTest:
+      controllable c_send;
+    end
+  end
+end
+group DetectorRow1:
+  group Detector1:
+    input bool laneInUse;
+    input Classification incident;
+    group Functioning:
+      uncontrollable u_defect;
+      uncontrollable u_degraded;
+      uncontrollable u_ok;
+      input bool ok;
+    end
+    group Monitor:
+      input int[0..15] data;
+    end
+    plant HW:
+      input bool detect;
+      input Byte I_speed;
+      input Byte I_state;
+      disc bool lastDetect = false;
+      location:
+        initial;
+        edge IncidentCalculation.e_calculate when detect != lastDetect do lastDetect := detect;
+        edge Functioning.u_ok when I_state = 0;
+        edge Functioning.u_degraded when I_state = 1;
+        edge Functioning.u_defect when I_state = 2;
+    end
+    group IncidentCalculation:
+      event e_calculate;
+      input Byte Vcor;
+    end
+  end
+  group Detector2:
+    input bool laneInUse;
+    input Classification incident;
+    group Functioning:
+      uncontrollable u_defect;
+      uncontrollable u_degraded;
+      uncontrollable u_ok;
+      input bool ok;
+    end
+    group Monitor:
+      input int[0..15] data;
+    end
+    plant HW:
+      input bool detect;
+      input Byte I_speed;
+      input Byte I_state;
+      disc bool lastDetect = false;
+      location:
+        initial;
+        edge IncidentCalculation.e_calculate when detect != lastDetect do lastDetect := detect;
+        edge Functioning.u_ok when I_state = 0;
+        edge Functioning.u_degraded when I_state = 1;
+        edge Functioning.u_defect when I_state = 2;
+    end
+    group IncidentCalculation:
+      event e_calculate;
+      input Byte Vcor;
+    end
+  end
+end
+group DetectorRow2:
+  group Detector1:
+    input bool laneInUse;
+    input Classification incident;
+    group Functioning:
+      uncontrollable u_defect;
+      uncontrollable u_degraded;
+      uncontrollable u_ok;
+      input bool ok;
+    end
+    group Monitor:
+      input int[0..15] data;
+    end
+    plant HW:
+      input bool detect;
+      input Byte I_speed;
+      input Byte I_state;
+      disc bool lastDetect = false;
+      location:
+        initial;
+        edge IncidentCalculation.e_calculate when detect != lastDetect do lastDetect := detect;
+        edge Functioning.u_ok when I_state = 0;
+        edge Functioning.u_degraded when I_state = 1;
+        edge Functioning.u_defect when I_state = 2;
+    end
+    group IncidentCalculation:
+      event e_calculate;
+      input Byte Vcor;
+    end
+  end
+  group Detector2:
+    input bool laneInUse;
+    input Classification incident;
+    group Functioning:
+      uncontrollable u_defect;
+      uncontrollable u_degraded;
+      uncontrollable u_ok;
+      input bool ok;
+    end
+    group Monitor:
+      input int[0..15] data;
+    end
+    plant HW:
+      input bool detect;
+      input Byte I_speed;
+      input Byte I_state;
+      disc bool lastDetect = false;
+      location:
+        initial;
+        edge IncidentCalculation.e_calculate when detect != lastDetect do lastDetect := detect;
+        edge Functioning.u_ok when I_state = 0;
+        edge Functioning.u_degraded when I_state = 1;
+        edge Functioning.u_defect when I_state = 2;
+    end
+    group IncidentCalculation:
+      event e_calculate;
+      input Byte Vcor;
+    end
+  end
+end

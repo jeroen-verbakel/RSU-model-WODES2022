@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg id="svg" width="1000" height="800">
+    <g id="groupRoad" transform="translate(30,50)">
+        <rect id="road" x="0" y="0" width="190" height="450" style="fill:gray"/>
+        <path
+                style="stroke:white;stroke-width:4;stroke-dasharray:none"
+                d="M 5,0 v 450"/>
+        <path
+                style="stroke:white;stroke-width:4;stroke-dasharray:30,30"
+                d="M 95,0 v 450"/>
+        <path
+                style="stroke:white;stroke-width:4;stroke-dasharray:none"
+                d="M 185,0 v 450"/>
+        <rect
+                style="fill:none;stroke:black;stroke-width:4"
+                id="raai"
+                width="210"
+                height="60"
+                x="-10"
+                y="350"/>
+    </g>
+    <text style="font-size:20px;font-family:Arial;fill:black">
+        <tspan id="t000" x="10" y="20">Tijd:</tspan>
+        <tspan id="tijd" x="59" y="20">0.0</tspan>
+    </text>
+    <g id="MSI" transform="translate(-130,0)">
+        <rect id="MSI_BG" x="0" y="0" width="60" height="60" style="fill:black"/>
+        <g id="FlashersT">
+            <circle id="MSI_F_TL" cx="5" cy="5" r="4" style="fill:yellow"/>
+            <circle id="MSI_F_TR" cx="55" cy="5" r="4" style="fill:yellow"/>
+        </g>
+        <g id="FlashersB">
+            <circle id="MSI_F_BL" cx="5" cy="55" r="4" style="fill:yellow"/>
+            <circle id="MSI_F_BR" cx="55" cy="55" r="4" style="fill:yellow"/>
+        </g>
+        <circle id="RR" cx="30" cy="30" r="25" style="stroke:red;stroke-width:2"/>
+        <text id="display" x="30" y="43"
+              style="font-size:36px;font-family:sans-serif;text-anchor:middle;fill:white">
+            <tspan></tspan>
+        </text>
+        <text id="Kruis" x="30" y="45"
+              style="font-size:45px;font-family:sans-serif;text-anchor:middle;fill:red">
+            <tspan>X</tspan>
+        </text>
+        <path id="PijlR"
+              d="m 15,15 28,28 m -20,0 h 20 v -20"
+              style="stroke:white;stroke-width:4"/>
+        <path id="PijlL"
+              d="m 45,15 -28,28 m 20,0 h -20 v -20"
+              style="stroke:white;stroke-width:4"/>
+    </g>
+    <path id="Det" transform="translate(-130,100)"
+          style="stroke:black;stroke-width:2;fill:gray"
+          d="M 0,0 v 10 h 60 v -10 z m 0,-6 v -10 h 60 v 10 z"/>
+
+    <g id="interface" style="font-size:15px;font-family:Arial">
+        <rect
+                x="390" y="15"
+                width="100" height="20"
+                style="fill:none;stroke:black;stroke-width:2"/>
+        <rect
+                x="390" y="35"
+                width="560" height="400"
+                style="fill:none;stroke:black;stroke-width:2"/>
+
+        <g id="DetState" transform="translate(-600,0)">
+            <text id="TextID" x="0" y="20">
+            </text>
+            <text x="0" y="40">
+                <tspan>Snelheid</tspan>
+            </text>
+            <g id="V10" transform="translate(0,50)">
+                <rect id="RectV10"
+                      width="40" height="20"
+                      style="fill:none;stroke:black;stroke-width:1"/>
+                <text style="text-anchor:middle" x="20" y="15">
+                    <tspan>10</tspan>
+                </text>
+            </g>
+            <g id="V30" transform="translate(50,50)">
+                <rect id="RectV30"
+                      width="40" height="20"
+                      style="fill:none;stroke:black;stroke-width:1"/>
+                <text style="text-anchor:middle" x="20" y="15">
+                    <tspan>30</tspan>
+                </text>
+            </g>
+            <g id="V50" transform="translate(100,50)">
+                <rect id="RectV50"
+                      width="40" height="20"
+                      style="fill:none;stroke:black;stroke-width:1"/>
+                <text style="text-anchor:middle" x="20" y="15">
+                    <tspan>50</tspan>
+                </text>
+            </g>
+            <g id="V80" transform="translate(150,50)">
+                <rect id="RectV80"
+                      width="40" height="20"
+                      style="fill:none;stroke:black;stroke-width:1"/>
+                <text style="text-anchor:middle" x="20" y="15">
+                    <tspan>80</tspan>
+                </text>
+            </g>
+            <g id="V100" transform="translate(200,50)">
+                <rect id="RectV100"
+                      width="40" height="20"
+                      style="fill:none;stroke:black;stroke-width:1"/>
+                <text style="text-anchor:middle" x="20" y="15">
+                    <tspan>100</tspan>
+                </text>
+            </g>
+            <text x="0" y="90">
+                <tspan>Intensiteit</tspan>
+            </text>
+            <g id="LAAG" transform="translate(0,100)">
+                <rect id="RectLAAG"
+                      width="70" height="20"
+                      style="fill:none;stroke:black;stroke-width:1"/>
+                <text style="text-anchor:middle" x="35" y="15">
+                    <tspan>Laag</tspan>
+                </text>
+            </g>
+            <g id="HOOG" transform="translate(85,100)">
+                <rect id="RectHOOG"
+                      width="70" height="20"
+                      style="fill:none;stroke:black;stroke-width:1"/>
+                <text style="text-anchor:middle" x="35" y="15">
+                    <tspan>Hoog</tspan>
+                </text>
+            </g>
+            <g id="HAND" transform="translate(170,100)">
+                <rect id="RectHAND"
+                      width="70" height="20"
+                      style="fill:none;stroke:black;stroke-width:1"/>
+                <text style="text-anchor:middle" x="35" y="15">
+                    <tspan>Hand</tspan>
+                </text>
+            </g>
+            <text x="0" y="140">
+                <tspan>Werkingstoestand detector</tspan>
+            </text>
+            <g id="OK" transform="translate(0,150)">
+                <rect id="RectOK"
+                      width="50" height="20"
+                      style="fill:none;stroke:black;stroke-width:1"/>
+                <text style="text-anchor:middle" x="25" y="15">
+                    <tspan>Ok</tspan>
+                </text>
+            </g>
+            <g id="DEG" transform="translate(65,150)">
+                <rect id="RectDEG"
+                      width="110" height="20"
+                      style="fill:none;stroke:black;stroke-width:1"/>
+                <text style="text-anchor:middle" x="55" y="15">
+                    <tspan>Gedegradeerd</tspan>
+                </text>
+            </g>
+            <g id="DEF" transform="translate(190,150)">
+                <rect id="RectDEF"
+                      width="50" height="20"
+                      style="fill:none;stroke:black;stroke-width:1"/>
+                <text style="text-anchor:middle" x="25" y="15">
+                    <tspan>Defect</tspan>
+                </text>
+            </g>
+        </g>
+        <g id="MSIState" transform="translate(-600,0)">
+            <text x="0" y="20" id="TextMSIID">
+            </text>
+            <text x="0" y="40">
+                <tspan>Veldbus state</tspan>
+            </text>
+            <g id="DataExchange" transform="translate(0,50)">
+                <rect id="RectDataExchange"
+                      width="150" height="20"
+                      style="fill:none;stroke:black;stroke-width:1"/>
+                <text style="text-anchor:middle" x="75" y="15">
+                    <tspan>In data-exchange</tspan>
+                </text>
+            </g>
+            <g id="UitDataExchange" transform="translate(160,50)">
+                <rect id="RectUitDataExchange"
+                      width="150" height="20"
+                      style="fill:none;stroke:black;stroke-width:1"/>
+                <text style="text-anchor:middle" x="75" y="15">
+                    <tspan>Uit data-exchange</tspan>
+                </text>
+            </g>
+            <text x="0" y="90">
+                <tspan>Werkingstoestand MSI</tspan>
+            </text>
+            <g id="WSMSI" transform="translate(0,100)">
+                <rect id="RectWSMSI"
+                      width="150" height="20"
+                      style="fill:none;stroke:black;stroke-width:1"/>
+                <text style="text-anchor:middle" x="75" y="15">
+                    <tspan>WS</tspan>
+                </text>
+            </g>
+            <g id="FFSMSI" transform="translate(160,100)">
+                <rect id="RectFFSMSI"
+                      width="150" height="20"
+                      style="fill:none;stroke:black;stroke-width:1"/>
+                <text style="text-anchor:middle" x="75" y="15">
+                    <tspan>FFS</tspan>
+                </text>
+            </g>
+            <text transform="translate(0,140)">
+                <tspan x="0" y="0">Output element:</tspan>
+                <tspan x="10" y="20">ABS groepcode</tspan>
+                <tspan x="10" y="40">ABS beeldcode</tspan>
+                <tspan x="10" y="60">ABS variatiecode</tspan>
+                <tspan x="10" y="80">ABS beeldstatus</tspan>
+                <tspan x="10" y="100">LB_ret</tspan>
+                <tspan x="10" y="120">TS_ret</tspan>
+                <tspan x="10" y="140">FFS</tspan>
+                <tspan x="10" y="160">WS</tspan>
+                <tspan x="10" y="180">DB beeld</tspan>
+                <tspan x="10" y="200">DB beeldstatus</tspan>
+                <tspan x="10" y="220">AS</tspan>
+                <tspan x="10" y="240">PS</tspan>
+                <tspan x="10" y="260">LS_ret</tspan>
+                <tspan x="160" y="0">Waarde:</tspan>
+                <tspan x="160" y="20" id="ABSGCw">waarde</tspan>
+                <tspan x="160" y="40" id="ABSBCw">waarde</tspan>
+                <tspan x="160" y="60" id="ABSVCw">waarde</tspan>
+                <tspan x="160" y="80" id="ABSBSw">0</tspan>
+                <tspan x="160" y="100" id="LBretw">waarde</tspan>
+                <tspan x="160" y="120" id="TSretw">waarde</tspan>
+                <tspan x="160" y="140" id="FFSw">waarde</tspan>
+                <tspan x="160" y="160" id="WSw">waarde</tspan>
+                <tspan x="160" y="180" id="DBbw">0</tspan>
+                <tspan x="160" y="200" id="DBbsw">0</tspan>
+                <tspan x="160" y="220" id="ASw">waarde</tspan>
+                <tspan x="160" y="240" id="PSw">waarde</tspan>
+                <tspan x="160" y="260" id="LSretw">waarde</tspan>
+            </text>
+            <text transform="translate(320,140)">
+                <tspan x="0" y="0">Input elementen :</tspan>
+                <tspan x="10" y="20">Groepcode</tspan>
+                <tspan x="10" y="40">Beeldcode</tspan>
+                <tspan x="10" y="60">Variatiecode</tspan>
+                <tspan x="10" y="80">LB</tspan>
+                <tspan x="10" y="100">RS</tspan>
+                <tspan x="10" y="120">SA</tspan>
+                <tspan x="10" y="140">TS</tspan>
+                <tspan x="10" y="160">LS</tspan>
+                <tspan x="160" y="0">Waarde:</tspan>
+                <tspan x="160" y="20" id="GCw">waarde</tspan>
+                <tspan x="160" y="40" id="BCw">waarde</tspan>
+                <tspan x="160" y="60" id="VCw">waarde</tspan>
+                <tspan x="160" y="80" id="LBw">waarde</tspan>
+                <tspan x="160" y="100" id="RSw">waarde</tspan>
+                <tspan x="160" y="120" id="SAw">waarde</tspan>
+                <tspan x="160" y="140" id="TSw">waarde</tspan>
+                <tspan x="160" y="160" id="LSw">waarde</tspan>
+            </text>
+        </g>
+    </g>
+</svg>

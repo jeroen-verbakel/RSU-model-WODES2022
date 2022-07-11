@@ -1,0 +1,866 @@
+import "constants.cif";
+input Legend VMAXSTAT;
+group OS1:
+  alg Legend vMaxDyn = if Commands.VMaxDyn.data1 = 50: SPEED50 elif Commands.VMaxDyn.data1 = 70: SPEED70 elif Commands.VMaxDyn.data1 = 80: SPEED80 elif Commands.VMaxDyn.data1 = 90: SPEED90 elif Commands.VMaxDyn.data1 = 100: SPEED100 elif Commands.VMaxDyn.data1 = 110: SPEED110 elif Commands.VMaxDyn.data1 = 120: SPEED120 elif Commands.VMaxDyn.data1 = 130: SPEED130 else BLANK end;
+  alg bool existingLegendOPA = (Commands.Inc_MSIOPA.newdata1 = SPEED50 or Commands.Inc_MSIOPA.newdata1 = SPEED70 or Commands.Inc_MSIOPA.newdata1 = SPEED90 or Commands.Inc_MSIOPA.newdata1 = SPEED100 or Commands.Inc_MSIOPA.newdata1 = RIGHTARROW or Commands.Inc_MSIOPA.newdata1 = CROSS or Commands.Inc_MSIOPA.newdata1 = BLANK) and (Commands.Inc_MSIOPA.newdata3 = SPEED50 or Commands.Inc_MSIOPA.newdata3 = SPEED70 or Commands.Inc_MSIOPA.newdata3 = SPEED90 or Commands.Inc_MSIOPA.newdata3 = SPEED100 or Commands.Inc_MSIOPA.newdata3 = LEFTARROW or Commands.Inc_MSIOPA.newdata3 = CROSS or Commands.Inc_MSIOPA.newdata3 = BLANK);
+  alg bool existingLegendAID = (Commands.Inc_MSIAID.newdata1 = SPEED50 or Commands.Inc_MSIAID.newdata1 = SPEED70 or Commands.Inc_MSIAID.newdata1 = SPEED90 or Commands.Inc_MSIAID.newdata1 = SPEED100 or Commands.Inc_MSIAID.newdata1 = BLANK) and (Commands.Inc_MSIAID.newdata3 = SPEED50 or Commands.Inc_MSIAID.newdata3 = SPEED70 or Commands.Inc_MSIAID.newdata3 = SPEED90 or Commands.Inc_MSIAID.newdata3 = SPEED100 or Commands.Inc_MSIAID.newdata3 = BLANK);
+  alg bool withinSpeedLimitOPA = (Commands.Inc_MSIOPA.newdata1 >= vMaxDyn and Commands.Inc_MSIOPA.newdata1 >= VMAXSTAT or Commands.Inc_MSIOPA.newdata1 = BLANK) and (Commands.Inc_MSIOPA.newdata3 >= vMaxDyn and Commands.Inc_MSIOPA.newdata3 >= VMAXSTAT or Commands.Inc_MSIOPA.newdata3 = BLANK);
+  alg bool withinSpeedLimitAID = (Commands.Inc_MSIAID.newdata1 >= vMaxDyn and Commands.Inc_MSIAID.newdata1 >= VMAXSTAT or Commands.Inc_MSIAID.newdata1 = BLANK) and (Commands.Inc_MSIAID.newdata3 >= vMaxDyn and Commands.Inc_MSIAID.newdata3 >= VMAXSTAT or Commands.Inc_MSIAID.newdata3 = BLANK);
+  alg bool noIllegalCombinations = (Commands.Inc_MSIOPA.newdata1 != CROSS or Commands.Inc_MSIOPA.newdata3 != LEFTARROW) and (Commands.Inc_MSIOPA.newdata1 != RIGHTARROW or Commands.Inc_MSIOPA.newdata3 != LEFTARROW) and (Commands.Inc_MSIOPA.newdata1 != RIGHTARROW or Commands.Inc_MSIOPA.newdata3 != CROSS);
+  plant State:
+    uncontrollable u_idle;
+    uncontrollable u_local;
+    uncontrollable u_online;
+    location idle:
+      initial; marked;
+      edge u_local goto local;
+      edge u_online goto online;
+    location local:
+      edge u_idle goto idle;
+      edge u_online goto online;
+    location online:
+      edge u_idle goto idle;
+      edge u_local goto local;
+  end
+  group HW:
+    input list[18] Byte I_data;
+    input Byte I_ack;
+    input Byte Q_nr;
+  end
+  group AIDLocation:
+    input bool useLocal;
+    input Legend recommendation1;
+    group Usage:
+      alg bool idle = State.idle;
+      alg bool local = State.local;
+      alg bool central = State.online;
+    end
+    plant Monitor:
+      uncontrollable u_change;
+      disc Legend oldRecommendation1 = BLANK;
+      location:
+        initial; marked;
+        edge u_change when oldRecommendation1 != recommendation1 do oldRecommendation1 := recommendation1;
+    end
+  end
+  group MSIRow:
+    input bool inUse;
+    input Legend legendAID1;
+    input Legend legendAID2;
+    alg bool fatalError = inUse and (MSI1.Functioning.defect or MSI2.Functioning.defect);
+    group RowUsage:
+      controllable c_on;
+      controllable c_off;
+    end
+    plant Timer:
+      controllable c_start;
+      uncontrollable u_end;
+      cont t der 1.0;
+      location idle:
+        initial; marked;
+        edge c_start do t := 0.0 goto waiting;
+      location waiting:
+        edge u_end when t >= 1.0 goto idle;
+    end
+    plant TimeSync:
+      controllable c_invert;
+      cont t der 1.0;
+      disc bool ts = true;
+      location:
+        initial; marked;
+        edge c_invert when t >= 20.0 do t := 0.0, ts := not ts;
+    end
+    plant Functioning:
+      uncontrollable u_defect;
+      monitor RowUsage.c_on, RowUsage.c_off;
+      location ok:
+        initial; marked;
+        edge u_defect when inUse and (MSI1.Functioning.defect or MSI2.Functioning.defect) goto defect;
+      location defect:
+        edge RowUsage.c_on goto ok;
+        edge RowUsage.c_off goto ok;
+    end
+    group Requested:
+      input Variation variation1;
+      input Variation variation2;
+    end
+    group MSI1:
+      input Legend requested;
+      plant Functioning:
+        uncontrollable u_defect;
+        uncontrollable u_degraded;
+        uncontrollable u_ok;
+        location ok:
+          initial; marked;
+          edge u_degraded goto degraded;
+          edge u_defect goto defect;
+        location degraded:
+          edge u_ok goto ok;
+          edge u_defect goto defect;
+        location defect:
+          edge u_ok goto ok;
+          edge u_degraded goto degraded;
+      end
+      group LegendPresentation:
+        input Legend shown;
+      end
+      group VariationCode:
+        input Variation shown;
+      end
+      plant StateAccordingToOS:
+        uncontrollable u_ok;
+        uncontrollable u_fatal;
+        uncontrollable u_noCommunication;
+        uncontrollable u_outsideOfSpec;
+        location ok:
+          initial; marked;
+          edge u_fatal goto fatal;
+          edge u_noCommunication goto noCommunication;
+          edge u_outsideOfSpec goto outsideOfSpec;
+        location fatal:
+          edge u_ok goto ok;
+          edge u_noCommunication goto noCommunication;
+          edge u_outsideOfSpec goto outsideOfSpec;
+        location noCommunication:
+          edge u_ok goto ok;
+          edge u_fatal goto fatal;
+          edge u_outsideOfSpec goto outsideOfSpec;
+        location outsideOfSpec:
+          edge u_ok goto ok;
+          edge u_fatal goto fatal;
+          edge u_noCommunication goto noCommunication;
+      end
+      plant Monitor:
+        uncontrollable u_stateChange;
+        uncontrollable u_shownChange;
+        alg list[2] Byte shown = [LegendPresentation.shown, VariationCode.shown];
+        alg Byte FSO = 0;
+        alg list[3] Byte state = [FSO, MSIRow.MSI1.HW.I_FFS, MSIRow.MSI1.HW.I_WS];
+        disc list[2] Byte oldShown = [0, 0];
+        disc list[3] Byte oldState = [0, 0, 0];
+        location:
+          initial; marked;
+          edge u_shownChange when (oldShown[0] != shown[0] or oldShown[1] != shown[1]) do oldShown := shown;
+          edge u_stateChange when (oldState[0] != state[0] or oldState[1] != state[1] or oldState[2] != state[2]) do oldState := state;
+      end
+      group HW:
+        input Byte I_FFS;
+        input Byte I_WS;
+      end
+    end
+    group MSI2:
+      input Legend requested;
+      plant Functioning:
+        uncontrollable u_defect;
+        uncontrollable u_degraded;
+        uncontrollable u_ok;
+        location ok:
+          initial; marked;
+          edge u_degraded goto degraded;
+          edge u_defect goto defect;
+        location degraded:
+          edge u_ok goto ok;
+          edge u_defect goto defect;
+        location defect:
+          edge u_ok goto ok;
+          edge u_degraded goto degraded;
+      end
+      group LegendPresentation:
+        input Legend shown;
+      end
+      group VariationCode:
+        input Variation shown;
+      end
+      plant StateAccordingToOS:
+        uncontrollable u_ok;
+        uncontrollable u_fatal;
+        uncontrollable u_noCommunication;
+        uncontrollable u_outsideOfSpec;
+        location ok:
+          initial; marked;
+          edge u_fatal goto fatal;
+          edge u_noCommunication goto noCommunication;
+          edge u_outsideOfSpec goto outsideOfSpec;
+        location fatal:
+          edge u_ok goto ok;
+          edge u_noCommunication goto noCommunication;
+          edge u_outsideOfSpec goto outsideOfSpec;
+        location noCommunication:
+          edge u_ok goto ok;
+          edge u_fatal goto fatal;
+          edge u_outsideOfSpec goto outsideOfSpec;
+        location outsideOfSpec:
+          edge u_ok goto ok;
+          edge u_fatal goto fatal;
+          edge u_noCommunication goto noCommunication;
+      end
+      plant Monitor:
+        uncontrollable u_stateChange;
+        uncontrollable u_shownChange;
+        alg list[2] Byte shown = [LegendPresentation.shown, VariationCode.shown];
+        alg Byte FSO = 0;
+        alg list[3] Byte state = [FSO, MSIRow.MSI2.HW.I_FFS, MSIRow.MSI2.HW.I_WS];
+        disc list[2] Byte oldShown = [0, 0];
+        disc list[3] Byte oldState = [0, 0, 0];
+        location:
+          initial; marked;
+          edge u_shownChange when (oldShown[0] != shown[0] or oldShown[1] != shown[1]) do oldShown := shown;
+          edge u_stateChange when (oldState[0] != state[0] or oldState[1] != state[1] or oldState[2] != state[2]) do oldState := state;
+      end
+      group HW:
+        input Byte I_FFS;
+        input Byte I_WS;
+      end
+    end
+    plant Monitor:
+      uncontrollable u_change;
+      alg int[0..1] dim = if Commands.Intensity.data1: 0 else 1 end;
+      alg int[0..1] aid = if AIDLocation.useLocal and (legendAID1 != BLANK or legendAID2 != BLANK): 1 else 0 end;
+      alg Byte state = aid * 4 + dim;
+      disc Byte oldState = 0;
+      location:
+        initial; marked;
+        edge u_change when oldState != state do oldState := state;
+    end
+  end
+  group Commands:
+    group MSIOPA:
+      uncontrollable u_confirm;
+      controllable c_accept;
+      controllable c_reject;
+    end
+    plant Inc_MSIOPA:
+      uncontrollable u_command;
+      controllable c_answer;
+      disc Legend data1 = 0;
+      disc Legend newdata1 = 0;
+      disc Variation data2 = 0;
+      disc Variation newdata2 = 0;
+      disc Legend data3 = 0;
+      disc Legend newdata3 = 0;
+      disc Variation data4 = 0;
+      disc Variation newdata4 = 0;
+      location inactive:
+        initial;
+        edge u_command do newdata1 := if HW.I_data[1] = 255 and HW.I_data[2] * 256 + HW.I_data[3] = 1: BLANK elif HW.I_data[1] = 255 and HW.I_data[2] * 256 + HW.I_data[3] = 2: ENDOFRESTRICTIONS elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 3: GREENARROW elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 130: SPEED130 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 120: SPEED120 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 110: SPEED110 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 100: SPEED100 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 90: SPEED90 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 80: SPEED80 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 70: SPEED70 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 60: SPEED60 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 50: SPEED50 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 40: SPEED40 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 30: SPEED30 elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 1: LEFTARROW elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 2: RIGHTARROW elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 4: CROSS else NOSIGN end, newdata2 := if HW.I_data[4] = 1: BASIC elif HW.I_data[4] = 2: FLASHERS elif HW.I_data[4] = 3: REDRING else 0 end, newdata3 := if HW.I_data[6] = 255 and HW.I_data[7] * 256 + HW.I_data[8] = 1: BLANK elif HW.I_data[6] = 255 and HW.I_data[7] * 256 + HW.I_data[8] = 2: ENDOFRESTRICTIONS elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 3: GREENARROW elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 130: SPEED130 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 120: SPEED120 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 110: SPEED110 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 100: SPEED100 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 90: SPEED90 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 80: SPEED80 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 70: SPEED70 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 60: SPEED60 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 50: SPEED50 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 40: SPEED40 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 30: SPEED30 elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 1: LEFTARROW elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 2: RIGHTARROW elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 4: CROSS else NOSIGN end, newdata4 := if HW.I_data[9] = 1: BASIC elif HW.I_data[9] = 2: FLASHERS elif HW.I_data[9] = 3: REDRING else 0 end goto commandReceived;
+      location commandReceived:
+        edge c_answer goto waitForConfirm;
+      location waitForConfirm:
+        edge MSIOPA.u_confirm goto confirmReceived;
+        edge u_command do newdata1 := if HW.I_data[1] = 255 and HW.I_data[2] * 256 + HW.I_data[3] = 1: BLANK elif HW.I_data[1] = 255 and HW.I_data[2] * 256 + HW.I_data[3] = 2: ENDOFRESTRICTIONS elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 3: GREENARROW elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 130: SPEED130 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 120: SPEED120 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 110: SPEED110 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 100: SPEED100 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 90: SPEED90 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 80: SPEED80 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 70: SPEED70 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 60: SPEED60 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 50: SPEED50 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 40: SPEED40 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 30: SPEED30 elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 1: LEFTARROW elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 2: RIGHTARROW elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 4: CROSS else NOSIGN end, newdata2 := if HW.I_data[4] = 1: BASIC elif HW.I_data[4] = 2: FLASHERS elif HW.I_data[4] = 3: REDRING else 0 end, newdata3 := if HW.I_data[6] = 255 and HW.I_data[7] * 256 + HW.I_data[8] = 1: BLANK elif HW.I_data[6] = 255 and HW.I_data[7] * 256 + HW.I_data[8] = 2: ENDOFRESTRICTIONS elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 3: GREENARROW elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 130: SPEED130 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 120: SPEED120 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 110: SPEED110 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 100: SPEED100 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 90: SPEED90 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 80: SPEED80 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 70: SPEED70 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 60: SPEED60 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 50: SPEED50 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 40: SPEED40 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 30: SPEED30 elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 1: LEFTARROW elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 2: RIGHTARROW elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 4: CROSS else NOSIGN end, newdata4 := if HW.I_data[9] = 1: BASIC elif HW.I_data[9] = 2: FLASHERS elif HW.I_data[9] = 3: REDRING else 0 end goto commandReceived;
+      location confirmReceived:
+        edge MSIOPA.c_accept do data1 := newdata1, data2 := newdata2, data3 := newdata3, data4 := newdata4 goto inactive;
+        edge MSIOPA.c_reject goto inactive;
+    end
+    group MSIAID:
+      uncontrollable u_confirm;
+      controllable c_accept;
+      controllable c_reject;
+    end
+    plant Inc_MSIAID:
+      uncontrollable u_command;
+      controllable c_answer;
+      disc Legend data1 = 0;
+      disc Legend newdata1 = 0;
+      disc Variation data2 = 0;
+      disc Variation newdata2 = 0;
+      disc Legend data3 = 0;
+      disc Legend newdata3 = 0;
+      disc Variation data4 = 0;
+      disc Variation newdata4 = 0;
+      location inactive:
+        initial;
+        edge u_command do newdata1 := if HW.I_data[1] = 255 and HW.I_data[2] * 256 + HW.I_data[3] = 1: BLANK elif HW.I_data[1] = 255 and HW.I_data[2] * 256 + HW.I_data[3] = 2: ENDOFRESTRICTIONS elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 3: GREENARROW elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 130: SPEED130 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 120: SPEED120 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 110: SPEED110 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 100: SPEED100 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 90: SPEED90 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 80: SPEED80 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 70: SPEED70 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 60: SPEED60 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 50: SPEED50 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 40: SPEED40 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 30: SPEED30 elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 1: LEFTARROW elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 2: RIGHTARROW elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 4: CROSS else NOSIGN end, newdata2 := if HW.I_data[4] = 1: BASIC elif HW.I_data[4] = 2: FLASHERS elif HW.I_data[4] = 3: REDRING else 0 end, newdata3 := if HW.I_data[6] = 255 and HW.I_data[7] * 256 + HW.I_data[8] = 1: BLANK elif HW.I_data[6] = 255 and HW.I_data[7] * 256 + HW.I_data[8] = 2: ENDOFRESTRICTIONS elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 3: GREENARROW elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 130: SPEED130 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 120: SPEED120 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 110: SPEED110 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 100: SPEED100 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 90: SPEED90 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 80: SPEED80 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 70: SPEED70 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 60: SPEED60 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 50: SPEED50 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 40: SPEED40 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 30: SPEED30 elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 1: LEFTARROW elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 2: RIGHTARROW elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 4: CROSS else NOSIGN end, newdata4 := if HW.I_data[9] = 1: BASIC elif HW.I_data[9] = 2: FLASHERS elif HW.I_data[9] = 3: REDRING else 0 end goto commandReceived;
+      location commandReceived:
+        edge c_answer goto waitForConfirm;
+      location waitForConfirm:
+        edge MSIAID.u_confirm goto confirmReceived;
+        edge u_command do newdata1 := if HW.I_data[1] = 255 and HW.I_data[2] * 256 + HW.I_data[3] = 1: BLANK elif HW.I_data[1] = 255 and HW.I_data[2] * 256 + HW.I_data[3] = 2: ENDOFRESTRICTIONS elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 3: GREENARROW elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 130: SPEED130 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 120: SPEED120 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 110: SPEED110 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 100: SPEED100 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 90: SPEED90 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 80: SPEED80 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 70: SPEED70 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 60: SPEED60 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 50: SPEED50 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 40: SPEED40 elif HW.I_data[1] = 1 and HW.I_data[2] * 256 + HW.I_data[3] = 30: SPEED30 elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 1: LEFTARROW elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 2: RIGHTARROW elif HW.I_data[1] = 2 and HW.I_data[2] * 256 + HW.I_data[3] = 4: CROSS else NOSIGN end, newdata2 := if HW.I_data[4] = 1: BASIC elif HW.I_data[4] = 2: FLASHERS elif HW.I_data[4] = 3: REDRING else 0 end, newdata3 := if HW.I_data[6] = 255 and HW.I_data[7] * 256 + HW.I_data[8] = 1: BLANK elif HW.I_data[6] = 255 and HW.I_data[7] * 256 + HW.I_data[8] = 2: ENDOFRESTRICTIONS elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 3: GREENARROW elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 130: SPEED130 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 120: SPEED120 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 110: SPEED110 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 100: SPEED100 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 90: SPEED90 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 80: SPEED80 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 70: SPEED70 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 60: SPEED60 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 50: SPEED50 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 40: SPEED40 elif HW.I_data[6] = 1 and HW.I_data[7] * 256 + HW.I_data[8] = 30: SPEED30 elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 1: LEFTARROW elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 2: RIGHTARROW elif HW.I_data[6] = 2 and HW.I_data[7] * 256 + HW.I_data[8] = 4: CROSS else NOSIGN end, newdata4 := if HW.I_data[9] = 1: BASIC elif HW.I_data[9] = 2: FLASHERS elif HW.I_data[9] = 3: REDRING else 0 end goto commandReceived;
+      location confirmReceived:
+        edge MSIAID.c_accept do data1 := newdata1, data2 := newdata2, data3 := newdata3, data4 := newdata4 goto inactive;
+        edge MSIAID.c_reject goto inactive;
+    end
+    plant OS:
+      controllable c_accept;
+      controllable c_answer;
+      uncontrollable u_command;
+      uncontrollable u_confirm;
+      disc Byte data1 = 3;
+      disc Byte newdata1 = 3;
+      location inactive:
+        initial;
+        edge u_command do newdata1 := HW.I_data[0] goto commandReceived;
+      location commandReceived:
+        edge c_answer goto waitForConfirm;
+      location waitForConfirm:
+        edge u_confirm goto confirmReceived;
+        edge u_command do newdata1 := HW.I_data[0] goto commandReceived;
+      location confirmReceived:
+        edge c_accept do data1 := newdata1 goto inactive;
+    end
+    plant DetOPA:
+      controllable c_accept;
+      controllable c_answer;
+      uncontrollable u_command;
+      uncontrollable u_confirm;
+      disc bool data1 = true;
+      disc bool newdata1 = true;
+      disc bool data2 = true;
+      disc bool newdata2 = true;
+      disc bool data3 = true;
+      disc bool newdata3 = true;
+      disc bool data4 = true;
+      disc bool newdata4 = true;
+      location inactive:
+        initial;
+        edge u_command do newdata1 := HW.I_data[0] div 128 = 0, newdata2 := HW.I_data[0] div 64 mod 2 = 0, newdata3 := HW.I_data[1] div 128 = 0, newdata4 := HW.I_data[1] div 64 mod 2 = 0 goto commandReceived;
+      location commandReceived:
+        edge c_answer goto waitForConfirm;
+      location waitForConfirm:
+        edge u_confirm goto confirmReceived;
+        edge u_command do newdata1 := HW.I_data[0] div 128 = 0, newdata2 := HW.I_data[0] div 64 mod 2 = 0, newdata3 := HW.I_data[1] div 128 = 0, newdata4 := HW.I_data[1] div 64 mod 2 = 0 goto commandReceived;
+      location confirmReceived:
+        edge c_accept do data1 := newdata1, data2 := newdata2, data3 := newdata3, data4 := newdata4 goto inactive;
+    end
+    plant DetLGD:
+      controllable c_accept;
+      controllable c_answer;
+      uncontrollable u_command;
+      uncontrollable u_confirm;
+      disc bool data1 = true;
+      disc bool newdata1 = true;
+      disc bool data2 = true;
+      disc bool newdata2 = true;
+      disc bool data3 = true;
+      disc bool newdata3 = true;
+      disc bool data4 = true;
+      disc bool newdata4 = true;
+      location inactive:
+        initial;
+        edge u_command do newdata1 := HW.I_data[0] div 128 = 0, newdata2 := HW.I_data[0] div 64 mod 2 = 0, newdata3 := HW.I_data[1] div 128 = 0, newdata4 := HW.I_data[1] div 64 mod 2 = 0 goto commandReceived;
+      location commandReceived:
+        edge c_answer goto waitForConfirm;
+      location waitForConfirm:
+        edge u_confirm goto confirmReceived;
+        edge u_command do newdata1 := HW.I_data[0] div 128 = 0, newdata2 := HW.I_data[0] div 64 mod 2 = 0, newdata3 := HW.I_data[1] div 128 = 0, newdata4 := HW.I_data[1] div 64 mod 2 = 0 goto commandReceived;
+      location confirmReceived:
+        edge c_accept do data1 := newdata1, data2 := newdata2, data3 := newdata3, data4 := newdata4 goto inactive;
+    end
+    plant Intensity:
+      controllable c_accept;
+      controllable c_answer;
+      uncontrollable u_command;
+      uncontrollable u_confirm;
+      disc bool data1 = true;
+      disc bool newdata1 = true;
+      location inactive:
+        initial;
+        edge u_command do newdata1 := HW.I_data[0] mod 2 = 0 goto commandReceived;
+      location commandReceived:
+        edge c_answer goto waitForConfirm;
+      location waitForConfirm:
+        edge u_confirm goto confirmReceived;
+        edge u_command do newdata1 := HW.I_data[0] mod 2 = 0 goto commandReceived;
+      location confirmReceived:
+        edge c_accept do data1 := newdata1 goto inactive;
+    end
+    plant VMaxDyn:
+      controllable c_accept;
+      controllable c_answer;
+      uncontrollable u_command;
+      uncontrollable u_confirm;
+      disc Byte data1 = 0;
+      disc Byte newdata1 = 0;
+      location inactive:
+        initial;
+        edge u_command do newdata1 := HW.I_data[0] goto commandReceived;
+      location commandReceived:
+        edge c_answer goto waitForConfirm;
+      location waitForConfirm:
+        edge u_confirm goto confirmReceived;
+        edge u_command do newdata1 := HW.I_data[0] goto commandReceived;
+      location confirmReceived:
+        edge c_accept do data1 := newdata1 goto inactive;
+    end
+  end
+  plant Monitor:
+    uncontrollable u_change;
+    alg int[0..3] state = if State.online: 1 elif State.local: 2 else 3 end;
+    disc int[0..3] oldState = 3;
+    location:
+      initial; marked;
+      edge u_change when oldState != state do oldState := state;
+  end
+  group Requests:
+    plant LGDState:
+      uncontrollable u_request;
+      controllable c_send;
+      location idle:
+        initial;
+        edge u_request goto request;
+      location request:
+        edge c_send goto idle;
+    end
+    plant MSIState:
+      uncontrollable u_request;
+      controllable c_send;
+      location idle:
+        initial;
+        edge u_request goto request;
+      location request:
+        edge c_send goto idle;
+    end
+    plant MSIShown:
+      uncontrollable u_request;
+      controllable c_send;
+      location idle:
+        initial;
+        edge u_request goto request;
+      location request:
+        edge c_send goto idle;
+    end
+    plant MUSState:
+      uncontrollable u_request;
+      controllable c_send;
+      location idle:
+        initial;
+        edge u_request goto request;
+      location request:
+        edge c_send goto idle;
+    end
+    plant DetState:
+      uncontrollable u_request;
+      controllable c_send;
+      location idle:
+        initial;
+        edge u_request goto request;
+      location request:
+        edge c_send goto idle;
+    end
+    plant OSStatus:
+      uncontrollable u_request;
+      controllable c_send;
+      location idle:
+        initial;
+        edge u_request goto request;
+      location request:
+        edge c_send goto idle;
+    end
+    plant SpeedInt:
+      uncontrollable u_request;
+      controllable c_send;
+      location idle:
+        initial;
+        edge u_request goto request;
+      location request:
+        edge c_send goto idle;
+    end
+    plant Vehicle:
+      uncontrollable u_request;
+      controllable c_send;
+      location idle:
+        initial;
+        edge u_request goto request;
+      location request:
+        edge c_send goto idle;
+    end
+    plant Version:
+      uncontrollable u_request;
+      controllable c_send;
+      location idle:
+        initial;
+        edge u_request goto request;
+      location request:
+        edge c_send goto idle;
+    end
+    plant OSState:
+      uncontrollable u_request;
+      controllable c_send;
+      location idle:
+        initial;
+        edge u_request goto request;
+      location request:
+        edge c_send goto idle;
+    end
+    plant AID:
+      uncontrollable u_request;
+      controllable c_send;
+      location idle:
+        initial;
+        edge u_request goto request;
+      location request:
+        edge c_send goto idle;
+    end
+    plant MUSTest:
+      uncontrollable u_request;
+      controllable c_send;
+      location idle:
+        initial;
+        edge u_request goto request;
+      location request:
+        edge c_send goto idle;
+    end
+  end
+  group Autonomous:
+    plant LGDState:
+      controllable c_send;
+      uncontrollable u_ack;
+      uncontrollable u_fail;
+      monitor State.u_local, State.u_online;
+      disc int[0..255] q_nr = 0;
+      cont t der 1.0;
+      location idle:
+        initial;
+        edge State.u_local when idle do t := 0.0 goto autonomous;
+        edge State.u_online when idle do t := 0.0 goto autonomous;
+      location autonomous:
+        edge c_send when t >= TOLERANCE do t := 0.0, q_nr := HW.Q_nr goto waiting;
+      location waiting:
+        edge u_ack when HW.I_ack = q_nr goto idle;
+        edge u_fail when t >= 4.0 goto autonomous;
+    end
+    plant MSIState:
+      controllable c_send;
+      uncontrollable u_ack;
+      uncontrollable u_fail;
+      monitor State.u_local, State.u_online, MSIRow.MSI1.Monitor.u_stateChange, MSIRow.MSI2.Monitor.u_stateChange;
+      disc int[0..255] q_nr = 0;
+      cont t der 1.0;
+      location idle:
+        edge State.u_local when idle do t := 0.0 goto autonomous;
+        edge State.u_online when idle do t := 0.0 goto autonomous;
+        edge MSIRow.MSI1.Monitor.u_stateChange do t := 0.0 goto autonomous;
+        edge MSIRow.MSI2.Monitor.u_stateChange do t := 0.0 goto autonomous;
+      location autonomous:
+        initial;
+        edge c_send when t >= TOLERANCE do t := 0.0, q_nr := HW.Q_nr goto waiting;
+      location waiting:
+        edge u_ack when HW.I_ack = q_nr goto idle;
+        edge u_fail when t >= 4.0 goto autonomous;
+    end
+    plant MSIShown:
+      controllable c_send;
+      uncontrollable u_ack;
+      uncontrollable u_fail;
+      monitor State.u_local, State.u_online, MSIRow.Monitor.u_change, MSIRow.MSI1.Monitor.u_shownChange, MSIRow.MSI2.Monitor.u_shownChange;
+      disc int[0..255] q_nr = 0;
+      cont t der 1.0;
+      location idle:
+        initial;
+        edge State.u_local when idle do t := 0.0 goto autonomous;
+        edge State.u_online when idle do t := 0.0 goto autonomous;
+        edge MSIRow.Monitor.u_change do t := 0.0 goto autonomous;
+        edge MSIRow.MSI1.Monitor.u_shownChange do t := 0.0 goto autonomous;
+        edge MSIRow.MSI2.Monitor.u_shownChange do t := 0.0 goto autonomous;
+      location autonomous:
+        edge c_send when t >= TOLERANCE do t := 0.0, q_nr := HW.Q_nr goto waiting;
+      location waiting:
+        edge u_ack when HW.I_ack = q_nr goto idle;
+        edge u_fail when t >= 4.0 goto autonomous;
+    end
+    plant MUSState:
+      controllable c_send;
+      uncontrollable u_ack;
+      uncontrollable u_fail;
+      monitor State.u_local, State.u_online;
+      disc int[0..255] q_nr = 0;
+      cont t der 1.0;
+      location idle:
+        initial;
+        edge State.u_local when idle do t := 0.0 goto autonomous;
+        edge State.u_online when idle do t := 0.0 goto autonomous;
+      location autonomous:
+        edge c_send when t >= TOLERANCE do t := 0.0, q_nr := HW.Q_nr goto waiting;
+      location waiting:
+        edge u_ack when HW.I_ack = q_nr goto idle;
+        edge u_fail when t >= 4.0 goto autonomous;
+    end
+    plant DetState:
+      controllable c_send;
+      uncontrollable u_ack;
+      uncontrollable u_fail;
+      monitor State.u_local, State.u_online, DetectorRow1.Detector1.Monitor.u_change, DetectorRow1.Detector2.Monitor.u_change, DetectorRow2.Detector1.Monitor.u_change, DetectorRow2.Detector2.Monitor.u_change;
+      disc int[0..255] q_nr = 0;
+      cont t der 1.0;
+      location idle:
+        initial;
+        edge State.u_local when idle do t := 0.0 goto autonomous;
+        edge State.u_online when idle do t := 0.0 goto autonomous;
+        edge DetectorRow1.Detector1.Monitor.u_change do t := 0.0 goto autonomous;
+        edge DetectorRow1.Detector2.Monitor.u_change do t := 0.0 goto autonomous;
+        edge DetectorRow2.Detector1.Monitor.u_change do t := 0.0 goto autonomous;
+        edge DetectorRow2.Detector2.Monitor.u_change do t := 0.0 goto autonomous;
+      location autonomous:
+        edge c_send when t >= TOLERANCE do t := 0.0, q_nr := HW.Q_nr goto waiting;
+      location waiting:
+        edge u_ack when HW.I_ack = q_nr goto idle;
+        edge u_fail when t >= 4.0 goto autonomous;
+    end
+    plant OSStatus:
+      controllable c_send;
+      uncontrollable u_ack;
+      uncontrollable u_fail;
+      monitor State.u_local, State.u_online;
+      disc int[0..255] q_nr = 0;
+      cont t der 1.0;
+      location idle:
+        edge State.u_local when idle do t := 0.0 goto autonomous;
+        edge State.u_online when idle do t := 0.0 goto autonomous;
+      location autonomous:
+        initial;
+        edge c_send when t >= TOLERANCE do t := 0.0, q_nr := HW.Q_nr goto waiting;
+      location waiting:
+        edge u_ack when HW.I_ack = q_nr goto idle;
+        edge u_fail when t >= 4.0 goto autonomous;
+    end
+    plant OSState:
+      controllable c_send;
+      uncontrollable u_ack;
+      uncontrollable u_fail;
+      monitor State.u_local, State.u_online, Monitor.u_change;
+      disc int[0..255] q_nr = 0;
+      cont t der 1.0;
+      location idle:
+        edge State.u_local when idle do t := 0.0 goto autonomous;
+        edge State.u_online when idle do t := 0.0 goto autonomous;
+        edge Monitor.u_change do t := 0.0 goto autonomous;
+      location autonomous:
+        initial;
+        edge c_send when t >= TOLERANCE do t := 0.0, q_nr := HW.Q_nr goto waiting;
+      location waiting:
+        edge u_ack when HW.I_ack = q_nr goto idle;
+        edge u_fail when t >= 4.0 goto autonomous;
+    end
+    plant AID:
+      controllable c_send;
+      uncontrollable u_ack;
+      uncontrollable u_fail;
+      monitor State.u_local, State.u_online, AIDLocation.Monitor.u_change;
+      disc int[0..255] q_nr = 0;
+      cont t der 1.0;
+      location idle:
+        initial;
+        edge State.u_local when idle do t := 0.0 goto autonomous;
+        edge State.u_online when idle do t := 0.0 goto autonomous;
+        edge AIDLocation.Monitor.u_change do t := 0.0 goto autonomous;
+      location autonomous:
+        edge c_send when t >= TOLERANCE do t := 0.0, q_nr := HW.Q_nr goto waiting;
+      location waiting:
+        edge u_ack when HW.I_ack = q_nr goto idle;
+        edge u_fail when t >= 4.0 goto autonomous;
+    end
+    plant MUSTest:
+      controllable c_send;
+      uncontrollable u_ack;
+      uncontrollable u_fail;
+      monitor State.u_local, State.u_online;
+      disc int[0..255] q_nr = 0;
+      cont t der 1.0;
+      location idle:
+        initial;
+        edge State.u_local when idle do t := 0.0 goto autonomous;
+        edge State.u_online when idle do t := 0.0 goto autonomous;
+      location autonomous:
+        edge c_send when t >= TOLERANCE do t := 0.0, q_nr := HW.Q_nr goto waiting;
+      location waiting:
+        edge u_ack when HW.I_ack = q_nr goto idle;
+        edge u_fail when t >= 4.0 goto autonomous;
+    end
+  end
+end
+group DetectorRow1:
+  group Detector1:
+    alg bool inUse = OS1.Commands.DetOPA.data1;
+    alg bool laneInUse = OS1.Commands.DetLGD.data1;
+    input bool calculationAllowed;
+    alg Classification incident = IncidentCalculation.incident;
+    plant Functioning:
+      uncontrollable u_defect;
+      uncontrollable u_degraded;
+      uncontrollable u_ok;
+      location ok:
+        initial; marked;
+        edge u_degraded goto degraded;
+        edge u_defect goto defect;
+      location degraded:
+        edge u_ok goto ok;
+        edge u_defect goto defect;
+      location defect:
+        edge u_ok goto ok;
+        edge u_degraded goto degraded;
+    end
+    plant Monitor:
+      uncontrollable u_change;
+      alg int[0..3] state = if Functioning.defect: 3 elif Functioning.degraded: 1 elif Functioning.ok: 0 else 2 end;
+      alg int[0..1] usage = if inUse: 0 else 1 end;
+      alg int[0..1] laneUsage = if laneInUse: 0 else 1 end;
+      alg int[0..15] data = state * 4 + laneUsage * 2 + usage;
+      disc int[0..15] oldData = 0;
+      location:
+        initial; marked;
+        edge u_change when oldData != data do oldData := data;
+    end
+    group HW:
+      input Byte I_speed;
+    end
+    plant IncidentCalculation:
+      event e_calculate;
+      event e_reset;
+      disc int n = 0;
+      disc real avgV = 100.0;
+      alg Classification incident = if n < NMIN: NOCLASSIFICATION elif avgV >= VUPPER: NOINCIDENT elif avgV < VUPPER and avgV >= VLOWER: DOUBTFUL else INCIDENT end;
+      alg real factor = if HW.I_speed >= avgV: FACTORFAST else FACTORSLOW end;
+      alg Byte Vcor = if HW.I_speed < VMIN: VMIN elif HW.I_speed > 250: 250 else HW.I_speed end;
+      location:
+        initial;
+        edge e_calculate when calculationAllowed do avgV := Vcor / (factor + (1.0 - factor) * Vcor / avgV), n := n + 1;
+        edge e_reset when not calculationAllowed and n > 0 do avgV := 100.0, n := 0;
+    end
+  end
+  group Detector2:
+    alg bool inUse = OS1.Commands.DetOPA.data2;
+    alg bool laneInUse = OS1.Commands.DetLGD.data2;
+    input bool calculationAllowed;
+    alg Classification incident = IncidentCalculation.incident;
+    plant Functioning:
+      uncontrollable u_defect;
+      uncontrollable u_degraded;
+      uncontrollable u_ok;
+      location ok:
+        initial; marked;
+        edge u_degraded goto degraded;
+        edge u_defect goto defect;
+      location degraded:
+        edge u_ok goto ok;
+        edge u_defect goto defect;
+      location defect:
+        edge u_ok goto ok;
+        edge u_degraded goto degraded;
+    end
+    plant Monitor:
+      uncontrollable u_change;
+      alg int[0..3] state = if Functioning.defect: 3 elif Functioning.degraded: 1 elif Functioning.ok: 0 else 2 end;
+      alg int[0..1] usage = if inUse: 0 else 1 end;
+      alg int[0..1] laneUsage = if laneInUse: 0 else 1 end;
+      alg int[0..15] data = state * 4 + laneUsage * 2 + usage;
+      disc int[0..15] oldData = 0;
+      location:
+        initial; marked;
+        edge u_change when oldData != data do oldData := data;
+    end
+    group HW:
+      input Byte I_speed;
+    end
+    plant IncidentCalculation:
+      event e_calculate;
+      event e_reset;
+      disc int n = 0;
+      disc real avgV = 100.0;
+      alg Classification incident = if n < NMIN: NOCLASSIFICATION elif avgV >= VUPPER: NOINCIDENT elif avgV < VUPPER and avgV >= VLOWER: DOUBTFUL else INCIDENT end;
+      alg real factor = if HW.I_speed >= avgV: FACTORFAST else FACTORSLOW end;
+      alg Byte Vcor = if HW.I_speed < VMIN: VMIN elif HW.I_speed > 250: 250 else HW.I_speed end;
+      location:
+        initial;
+        edge e_calculate when calculationAllowed do avgV := Vcor / (factor + (1.0 - factor) * Vcor / avgV), n := n + 1;
+        edge e_reset when not calculationAllowed and n > 0 do avgV := 100.0, n := 0;
+    end
+  end
+end
+group DetectorRow2:
+  group Detector1:
+    alg bool inUse = OS1.Commands.DetOPA.data3;
+    alg bool laneInUse = OS1.Commands.DetLGD.data3;
+    input bool calculationAllowed;
+    alg Classification incident = IncidentCalculation.incident;
+    plant Functioning:
+      uncontrollable u_defect;
+      uncontrollable u_degraded;
+      uncontrollable u_ok;
+      location ok:
+        initial; marked;
+        edge u_degraded goto degraded;
+        edge u_defect goto defect;
+      location degraded:
+        edge u_ok goto ok;
+        edge u_defect goto defect;
+      location defect:
+        edge u_ok goto ok;
+        edge u_degraded goto degraded;
+    end
+    plant Monitor:
+      uncontrollable u_change;
+      alg int[0..3] state = if Functioning.defect: 3 elif Functioning.degraded: 1 elif Functioning.ok: 0 else 2 end;
+      alg int[0..1] usage = if inUse: 0 else 1 end;
+      alg int[0..1] laneUsage = if laneInUse: 0 else 1 end;
+      alg int[0..15] data = state * 4 + laneUsage * 2 + usage;
+      disc int[0..15] oldData = 0;
+      location:
+        initial; marked;
+        edge u_change when oldData != data do oldData := data;
+    end
+    group HW:
+      input Byte I_speed;
+    end
+    plant IncidentCalculation:
+      event e_calculate;
+      event e_reset;
+      disc int n = 0;
+      disc real avgV = 100.0;
+      alg Classification incident = if n < NMIN: NOCLASSIFICATION elif avgV >= VUPPER: NOINCIDENT elif avgV < VUPPER and avgV >= VLOWER: DOUBTFUL else INCIDENT end;
+      alg real factor = if HW.I_speed >= avgV: FACTORFAST else FACTORSLOW end;
+      alg Byte Vcor = if HW.I_speed < VMIN: VMIN elif HW.I_speed > 250: 250 else HW.I_speed end;
+      location:
+        initial;
+        edge e_calculate when calculationAllowed do avgV := Vcor / (factor + (1.0 - factor) * Vcor / avgV), n := n + 1;
+        edge e_reset when not calculationAllowed and n > 0 do avgV := 100.0, n := 0;
+    end
+  end
+  group Detector2:
+    alg bool inUse = OS1.Commands.DetOPA.data4;
+    alg bool laneInUse = OS1.Commands.DetLGD.data4;
+    input bool calculationAllowed;
+    alg Classification incident = IncidentCalculation.incident;
+    plant Functioning:
+      uncontrollable u_defect;
+      uncontrollable u_degraded;
+      uncontrollable u_ok;
+      location ok:
+        initial; marked;
+        edge u_degraded goto degraded;
+        edge u_defect goto defect;
+      location degraded:
+        edge u_ok goto ok;
+        edge u_defect goto defect;
+      location defect:
+        edge u_ok goto ok;
+        edge u_degraded goto degraded;
+    end
+    plant Monitor:
+      uncontrollable u_change;
+      alg int[0..3] state = if Functioning.defect: 3 elif Functioning.degraded: 1 elif Functioning.ok: 0 else 2 end;
+      alg int[0..1] usage = if inUse: 0 else 1 end;
+      alg int[0..1] laneUsage = if laneInUse: 0 else 1 end;
+      alg int[0..15] data = state * 4 + laneUsage * 2 + usage;
+      disc int[0..15] oldData = 0;
+      location:
+        initial; marked;
+        edge u_change when oldData != data do oldData := data;
+    end
+    group HW:
+      input Byte I_speed;
+    end
+    plant IncidentCalculation:
+      event e_calculate;
+      event e_reset;
+      disc int n = 0;
+      disc real avgV = 100.0;
+      alg Classification incident = if n < NMIN: NOCLASSIFICATION elif avgV >= VUPPER: NOINCIDENT elif avgV < VUPPER and avgV >= VLOWER: DOUBTFUL else INCIDENT end;
+      alg real factor = if HW.I_speed >= avgV: FACTORFAST else FACTORSLOW end;
+      alg Byte Vcor = if HW.I_speed < VMIN: VMIN elif HW.I_speed > 250: 250 else HW.I_speed end;
+      location:
+        initial;
+        edge e_calculate when calculationAllowed do avgV := Vcor / (factor + (1.0 - factor) * Vcor / avgV), n := n + 1;
+        edge e_reset when not calculationAllowed and n > 0 do avgV := 100.0, n := 0;
+    end
+  end
+end

@@ -1,0 +1,368 @@
+import "definitions.cif";
+
+group CC1:
+  svgfile "visualisation.svg";
+  event e_confirm, e_request, e_command, e_poll, e_parameter;
+  event e_receive;
+
+  automaton Sender:
+    disc DispMessage I = (0, 0, [], true);
+    location:
+      initial;
+      edge e_poll      do I := ((I[nr] + 1) mod 256, 0 * 32 + 0, [], true);
+      edge e_parameter do I := ((I[nr] + 1) mod 256, 1 * 32 + 0, [], true);
+      edge e_command   do I := ((I[nr] + 1) mod 256, 3 * 32 + Commands.sfc, Commands.data, true);
+      edge e_request   do I := ((I[nr] + 1) mod 256, 4 * 32 + Requests.sfc, [], true);
+      edge e_confirm   do I := ((I[nr] + 1) mod 256, 5 * 32 + Commands.sfc, [], true);
+  end
+
+  automaton Messages:
+    event e_pollrcv, e_send;
+    disc Byte In, Qn;
+    disc list[nLog] DispMessage Log;
+    cont t der 1;
+    disc DispMessage Q;
+    alg DispMessage I = Sender.I;
+    disc bool dummy = false;
+    location:
+      initial;
+      edge e_pollrcv when t > T_RECV do t := 0, Q := ClipData(receive(Q));
+      edge e_receive when Qn != Q[nr] do Qn := Q[nr], Log := [Q] + Log[:-1];
+      edge e_send    when In != I[nr] do In := I[nr], Log := [I] + Log[:-1],
+          dummy := send(I);
+  end
+
+  group Poll:
+    B_Poll: TwoState("PollAan", "PollUit", 0, 1, 0);
+    automaton Poll:
+      cont t = T_POLL der 1;
+      location:
+        initial;
+        edge e_poll when B_Poll.data = 1 and t >= T_POLL do t := 0;
+        edge e_parameter, e_command, e_request, e_confirm do t := 0;
+        edge e_receive do t := max(T_POLL - 1.0, t);
+    end
+  end
+
+  automaton Parameters:
+    location:
+      initial;
+      edge e_parameter when false;
+  end
+
+  group Commands:
+    alg Byte sfc = Cycle.sfc;
+    alg VarMessage data = Cycle.data;
+
+    // MSI standen OPA
+    OPA1: MSICommands(true, 1, MSISelect.selected = 1);
+    OPA2: MSICommands(true, 2, MSISelect.selected = 3);
+    OPA3: MSICommands(true, 3, MSISelect.selected = 5);
+    // MSI standen AID
+    AID1: MSICommands(false, 1, MSISelect.selected = 2);
+    AID2: MSICommands(false, 2, MSISelect.selected = 4);
+    AID3: MSICommands(false, 3, MSISelect.selected = 6);
+    // OS toestand
+    StateOS: ThreeState("OsOnline", "OsLokaal", "OsIdle", 3, 1, 2, 3);
+    // Detectorstatus OPA
+    DR1OPA: DetRaai("1", "OPA");
+    DR2OPA: DetRaai("2", "OPA");
+    DR3OPA: DetRaai("3", "OPA");
+    DR4OPA: DetRaai("4", "OPA");
+    // Detectorstatus beelden
+    DR1LGD: DetRaai("1", "LGD");
+    DR2LGD: DetRaai("2", "LGD");
+    DR3LGD: DetRaai("3", "LGD");
+    DR4LGD: DetRaai("4", "LGD");
+    // Lichtintensiteit
+    Intensity: TwoState("IntFel",  "IntDim",  1, 0, 1);
+    // MUS stand
+    // MUS wiebeltest
+    // Dynamische maximumsnelheid
+    VMaxDyn: FourState("Vmax50", "Vmax70", "Vmax90", "Vmax100", 100, 50, 70, 90, 100);
+
+    automaton Cycle:
+      event e_stateOS, e_DetOPA, e_DetLGD, e_OPA, e_AID, e_INT, e_VMAX;
+      event e_timeout;
+      cont t der 1;
+      const real TMAX = 3.0;
+      disc Byte sfc;
+      disc VarMessage data;
+      disc bool sendStateOS, sendInt, sendVMax;
+      location idle:
+        initial;
+        edge e_OPA do t := 0, sfc := 0,
+            data := [1,OPA1.data1, OPA1.data2, OPA1.data3, OPA1.data4,
+                     2,OPA2.data1, OPA2.data2, OPA2.data3, OPA2.data4,
+                     3,OPA3.data1, OPA3.data2, OPA3.data3, OPA3.data4]
+            goto command;
+        edge e_AID do t := 0, sfc := 1,
+            data := [1,AID1.data1, AID1.data2, AID1.data3, AID1.data4,
+                     2,AID2.data1, AID2.data2, AID2.data3, AID2.data4,
+                     3,AID3.data1, AID3.data2, AID3.data3, AID3.data4]
+            goto command;
+        edge e_stateOS when sendStateOS != StateOS.send do t := 0, sfc := 2,
+            data := [StateOS.data], sendStateOS := StateOS.send goto command;
+        edge e_DetOPA do t := 0, sfc := 3,
+            data := [DR1OPA.data, DR2OPA.data, DR3OPA.data, DR4OPA.data]
+            goto command;
+        edge e_DetLGD do t := 0, sfc := 4,
+            data := [DR1LGD.data, DR2LGD.data, DR3LGD.data, DR4LGD.data]
+            goto command;
+        edge e_INT when sendInt != Intensity.send do t := 0, sfc := 5,
+            data := [Intensity.data], sendInt := Intensity.send goto command;
+        edge e_VMAX when sendVMax != VMaxDyn.send do t := 0, sfc := 9,
+            data := [VMaxDyn.data], sendVMax := VMaxDyn.send goto command;
+      location command:
+        edge e_command goto await;
+        edge e_DetOPA, e_DetLGD, e_OPA, e_AID;
+        edge e_timeout when t >= TMAX goto idle;
+      location await:
+        edge e_confirm when Messages.Q[mc] div 32 = 3 goto idle;
+        edge e_DetOPA, e_DetLGD, e_OPA, e_AID;
+        edge e_timeout when t >= TMAX goto idle;
+    end
+
+    svgin id "SendOPA"    event Cycle.e_OPA;
+    svgin id "SendAID"    event Cycle.e_AID;
+    svgin id "SendDetOPA" event Cycle.e_DetOPA;
+    svgin id "SendDetLGD" event Cycle.e_DetLGD;
+
+    automaton MSISelect:
+      monitor OPA1.e_select, OPA2.e_select, OPA3.e_select,
+              AID1.e_select, AID2.e_select, AID3.e_select;
+      disc int selected = 1;
+      location:
+        initial;
+        edge OPA1.e_select do selected := 1;
+        edge OPA2.e_select do selected := 3;
+        edge OPA3.e_select do selected := 5;
+        edge AID1.e_select do selected := 2;
+        edge AID2.e_select do selected := 4;
+        edge AID3.e_select do selected := 6;
+    end
+  end
+
+  group Requests:
+    alg Byte sfc = Requests.sfc;
+    automaton Requests:
+      event e_stateLGD, e_stateMSI, e_legendShown, e_MUSshown,
+            e_stateDet, e_statusOS, e_speedInt,    e_speedLast,
+            e_version,  e_stateOS,  e_AID,         e_MUStest;
+      disc Byte sfc;
+      location idle:
+        initial;
+        edge e_stateLGD    do sfc := 0  goto request;
+        edge e_stateMSI    do sfc := 1  goto request;
+        edge e_legendShown do sfc := 2  goto request;
+        edge e_MUSshown    do sfc := 3  goto request;
+        edge e_stateDet    do sfc := 4  goto request;
+        edge e_statusOS    do sfc := 5  goto request;
+        edge e_speedInt    do sfc := 6  goto request;
+        edge e_speedLast   do sfc := 7  goto request;
+        edge e_version     do sfc := 8  goto request;
+        edge e_stateOS     do sfc := 9  goto request;
+        edge e_AID         do sfc := 10 goto request;
+        edge e_MUStest     do sfc := 11 goto request;
+      location request:
+        edge e_request goto idle;
+    end
+
+    svgin id "Req0"  event Requests.e_stateLGD;
+    svgin id "Req1"  event Requests.e_stateMSI;
+    svgin id "Req2"  event Requests.e_legendShown;
+    svgin id "Req3"  event Requests.e_MUSshown;
+    svgin id "Req4"  event Requests.e_stateDet;
+    svgin id "Req5"  event Requests.e_statusOS;
+    svgin id "Req6"  event Requests.e_speedInt;
+    svgin id "Req7"  event Requests.e_speedLast;
+    svgin id "Req8"  event Requests.e_version;
+    svgin id "Req9"  event Requests.e_stateOS;
+    svgin id "Req10" event Requests.e_AID;
+    svgin id "Req11" event Requests.e_MUStest;
+  end
+
+  svgmove id "MessageHeader" to 428, 283;
+  const int nLog = 18; // Number of shown messages.
+  M1:  Viz_Message(1,  430, Messages.Log[0]);
+  M2:  Viz_Message(2,  430, Messages.Log[1]);
+  M3:  Viz_Message(3,  430, Messages.Log[2]);
+  M4:  Viz_Message(4,  430, Messages.Log[3]);
+  M5:  Viz_Message(5,  430, Messages.Log[4]);
+  M6:  Viz_Message(6,  430, Messages.Log[5]);
+  M7:  Viz_Message(7,  430, Messages.Log[6]);
+  M8:  Viz_Message(8,  430, Messages.Log[7]);
+  M9:  Viz_Message(9,  430, Messages.Log[8]);
+  M10: Viz_Message(10, 430, Messages.Log[9]);
+  M11: Viz_Message(11, 430, Messages.Log[10]);
+  M12: Viz_Message(12, 430, Messages.Log[11]);
+  M13: Viz_Message(13, 430, Messages.Log[12]);
+  M14: Viz_Message(14, 430, Messages.Log[13]);
+  M15: Viz_Message(15, 430, Messages.Log[14]);
+  M16: Viz_Message(16, 430, Messages.Log[15]);
+  M17: Viz_Message(17, 430, Messages.Log[16]);
+  M18: Viz_Message(18, 430, Messages.Log[17]);
+
+  svgout id "alles" attr "transform" value "scale(1.3)";
+end
+
+group def DetRaai(alg string i, opd):
+  alg Byte data = (Det1.data + Det2.data + Det3.data + Det4.data +
+       Det5.data + Det6.data + Det7.data + Det8.data) mod 256;
+  Det1: Toggle("Det" + opd + i + "1", 0, 128);
+  Det2: Toggle("Det" + opd + i + "2", 0, 64);
+  Det3: Toggle("Det" + opd + i + "3", 0, 32);
+  Det4: Toggle("Det" + opd + i + "4", 0, 16);
+  Det5: Toggle("Det" + opd + i + "5", 0, 8);
+  Det6: Toggle("Det" + opd + i + "6", 0, 4);
+  Det7: Toggle("Det" + opd + i + "7", 0, 2);
+  Det8: Toggle("Det" + opd + i + "8", 0, 1);
+end
+
+group def Viz_Message(alg int nr, x; alg DispMessage message):
+  alg string Nr = fmt("%d", nr);
+  alg int fc = message[mc] div 32;
+  alg int sfc = message[mc] mod 32;
+  svgcopy id "Message" post Nr;
+  svgmove id "Message"  + Nr to x, 315+16*nr;
+  svgout id "Text_nr"   + Nr text value message[nr];
+  svgout id "Text_Sfc"  + Nr text value if fc in {3,5}: CCSfcName[sfc] elif fc in {2,4}: OSSfcName[sfc] else CCFcName[fc] end;
+  svgout id "Text_Type" + Nr text value if message[CC]: CCFcName[fc] else OSFcName[fc] end;
+  svgout id "Text_Data" + Nr text value message[data];
+end
+
+group def MSICommands(alg bool OPA; alg int nr; alg bool visible):
+  alg string name = if OPA: fmt("_OPA%d", nr) else fmt("_AID%d", nr) end;
+  alg Byte data1 = Show.groupCode;
+  alg Byte data2 = Show.legendCode div 256;
+  alg Byte data3 = Show.legendCode mod 256;
+  alg Byte data4 = Show.variationCode;
+  event e_select;
+  automaton Selection:
+    location:
+      initial;
+      edge e_select;
+  end
+  automaton Show:
+    event e_50, e_70, e_90, e_leftArrow, e_rightArrow, e_cross, e_blank;
+    event e_basic, e_flashers, e_redRing;
+    disc Legend legend = BLANK;
+    disc Variation variation = BASIC;
+    disc Byte groupCode = 255;
+    disc Word legendCode = 1;
+    disc Byte variationCode = 1;
+    location:
+      initial;
+      edge e_50         do groupCode := 1,   legendCode := 50, legend := SPEED50;
+      edge e_70         do groupCode := 1,   legendCode := 70, legend := SPEED70;
+      edge e_90         do groupCode := 1,   legendCode := 90, legend := SPEED90;
+      edge e_leftArrow  do groupCode := 2,   legendCode := 1,  legend := LEFTARROW;
+      edge e_rightArrow do groupCode := 2,   legendCode := 2,  legend := RIGHTARROW;
+      edge e_cross      do groupCode := 2,   legendCode := 4,  legend := CROSS;
+      edge e_blank      do groupCode := 255, legendCode := 1,  legend := BLANK;
+      edge e_basic      do variationCode := 1, variation := BASIC;
+      edge e_flashers   do variationCode := 2, variation := FLASHERS;
+      edge e_redRing    do variationCode := 3, variation := REDRING;
+  end
+  svgcopy id "CS" post name;
+  svgmove id "CS" + name to 40 + 75*nr, if OPA: 40 else 115 end;
+  svgin   id "Select" + name event e_select;
+  svgout id "MSInr"     + name text value if OPA: fmt("%d", nr) else " " end;
+  svgout id "display"   + name text value LegendName[Show.legend];
+  svgout id "Rect"      + name attr "stroke" value if visible: "blue" else "none" end;
+  svgout id "display"   + name attr "visibility" value if Show.legend in {SPEED50,SPEED70,SPEED90,SPEED100}: "visible" else "hidden" end;
+  svgout id "Kruis"     + name attr "visibility" value if Show.legend = CROSS:       "visible" else "hidden" end;
+  svgout id "PijlR"     + name attr "visibility" value if Show.legend = RIGHTARROW:  "visible" else "hidden" end;
+  svgout id "PijlL"     + name attr "visibility" value if Show.legend = LEFTARROW:   "visible" else "hidden" end;
+  svgout id "FlashersT" + name attr "visibility" value if Show.variation = FLASHERS: "visible" else "hidden" end;
+  svgout id "FlashersB" + name attr "visibility" value if Show.variation = FLASHERS: "visible" else "hidden" end;
+  svgout id "RR"        + name attr "visibility" value if Show.variation = REDRING:  "visible" else "hidden" end;
+
+  svgcopy id "LegendWindow" post name;
+  svgmove id "LegendWindow" + name to 430, 40;
+  svgout id  "LegendWindow" + name attr "visibility" value if visible : "visible" else "hidden" end;
+  svgin id "SPEED50"    + name event Show.e_50;
+  svgin id "SPEED70"    + name event Show.e_70;
+  svgin id "SPEED90"    + name event Show.e_90;
+  svgin id "LEFTARROW"  + name event Show.e_leftArrow;
+  svgin id "RIGHTARROW" + name event Show.e_rightArrow;
+  svgin id "CROSS"      + name event Show.e_cross;
+  svgin id "BLANK"      + name event Show.e_blank;
+  svgin id "BASIC"      + name event Show.e_basic;
+  svgin id "FLASHERS"   + name event Show.e_flashers;
+  svgin id "REDRING"    + name event Show.e_redRing;
+end
+
+group def Toggle(alg string name; alg Byte valA, valB):
+  event e_toggle;
+  alg Byte data = State.var;
+  automaton State:
+    disc Byte var = valA;
+    location a:
+      initial;
+      edge e_toggle when var = valA do var := valB;
+      edge e_toggle when var = valB do var := valA;
+  end
+  svgin id name  event e_toggle;
+  svgout id name attr "fill" value if State.var = valA: "green" else "red" end;
+end
+group def TwoState(alg string nameA, nameB; alg Byte init, valA, valB):
+  event e_A, e_B;
+  alg Byte data = State.var;
+  alg bool send = State.send;
+  automaton State:
+    disc Byte var = init;
+    disc bool send;
+    location:
+      initial;
+      edge e_A do var := valA, send := not send;
+      edge e_B do var := valB, send := not send;
+  end
+  svgin id nameA  event e_A;
+  svgin id nameB  event e_B;
+  svgout id "Rect" + nameA attr "fill" value if State.var = valA: "lightgray" else "none" end;
+  svgout id "Rect" + nameB attr "fill" value if State.var = valB: "lightgray" else "none" end;
+end
+group def ThreeState(alg string nameA, nameB, nameC; alg Byte init, valA, valB, valC):
+  event e_A, e_B, e_C;
+  alg Byte data = State.var;
+  alg bool send = State.send;
+  automaton State:
+    disc Byte var = init;
+    disc bool send;
+    location:
+      initial;
+      edge e_A do var := valA, send := not send;
+      edge e_B do var := valB, send := not send;
+      edge e_C do var := valC, send := not send;
+  end
+  svgin id nameA  event e_A;
+  svgin id nameB  event e_B;
+  svgin id nameC  event e_C;
+  svgout id "Rect" + nameA attr "fill" value if State.var = valA: "lightgray" else "none" end;
+  svgout id "Rect" + nameB attr "fill" value if State.var = valB: "lightgray" else "none" end;
+  svgout id "Rect" + nameC attr "fill" value if State.var = valC: "lightgray" else "none" end;
+end
+group def FourState(alg string nameA, nameB, nameC, nameD; alg Byte init, valA, valB, valC, valD):
+  event e_A, e_B, e_C, e_D;
+  alg Byte data = State.var;
+  alg bool send = State.send;
+  automaton State:
+    disc Byte var = init;
+    disc bool send;
+    location:
+      initial;
+      edge e_A do var := valA, send := not send;
+      edge e_B do var := valB, send := not send;
+      edge e_C do var := valC, send := not send;
+      edge e_D do var := valD, send := not send;
+  end
+  svgin id nameA  event e_A;
+  svgin id nameB  event e_B;
+  svgin id nameC  event e_C;
+  svgin id nameD  event e_D;
+  svgout id "Rect" + nameA attr "fill" value if State.var = valA: "lightgray" else "none" end;
+  svgout id "Rect" + nameB attr "fill" value if State.var = valB: "lightgray" else "none" end;
+  svgout id "Rect" + nameC attr "fill" value if State.var = valC: "lightgray" else "none" end;
+  svgout id "Rect" + nameD attr "fill" value if State.var = valD: "lightgray" else "none" end;
+end

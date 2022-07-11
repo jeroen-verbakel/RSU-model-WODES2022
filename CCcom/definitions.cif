@@ -1,0 +1,136 @@
+import "../generated_files/constants.cif";
+const real T_POLL = 6.0; // Interval for sending poll messages.
+const real T_RECV = 0.1; // Interval for receiving messages.
+const int msgLen = 18; // Length of a message in the model.
+
+type Message = list[msgLen] Byte;
+type VarMessage = list[0..msgLen] Byte;
+alg Message NODATA = noData();
+func Message noData(): Message a; return a; end
+type DispMessage = tuple(Byte nr, mc; VarMessage data; bool CC);
+
+func bool ext_send(int Q_nr, Q_messagecode; Message Q_data; int LEN): "java:CCcom.Communication.send|../";
+func list[msgLen+3] Byte ext_receive(real t; int LEN): "java:CCcom.Communication.receive|../";
+func DispMessage receive(DispMessage message):
+  list[msgLen+3] Byte data = ext_receive(0.0, msgLen);
+  if data[0] = 0:
+    return message;
+  else
+    return (data[1], data[2], data[3:], false);
+  end
+end
+func bool send(DispMessage message):
+  return ext_send(message[nr], message[mc], pad(message[data]), msgLen);
+end
+func DispMessage ClipData(DispMessage message):
+  int len;
+  int fc = message[mc] div 32;
+  int sfc = message[mc] mod 32;
+  if message[CC]:
+    len := switch fc:
+      case 0: 0
+      case 1: 0
+      case 3: CMDLen[sfc]
+      case 4: 0
+      case 5: 0
+      else 16
+    end;
+  else
+    len := switch fc:
+      case 0: 0
+      case 2: ReqLen[sfc]
+      case 3: CMDLen[sfc]
+      case 4: ReqLen[sfc]
+      case 5: 1
+      else 16
+    end;
+  end
+  message[data] := message[data][0:len];
+  return message;
+end
+func Message pad(VarMessage message):
+  int i = 0;
+  Message out;
+  while i < size(message):
+    out[i] := message[i];
+    i := i + 1;
+  end
+  return out;
+end
+
+const dict(Legend:string) LegendName = {
+    NOSIGN:     "no sign",
+    BLANK:      "blank",
+    SPEED100:   "100",
+    SPEED90:    "90",
+    SPEED70:    "70",
+    SPEED50:    "50",
+    LEFTARROW:  "Links",
+    RIGHTARROW: "Rechts",
+    CROSS:      "Kruis"};
+
+const dict (Byte: string) CCFcName = {
+    0: "Poll",
+    1: "Parameter",
+    2: "Onbekende FC 2",
+    3: "Opdracht",
+    4: "Verzoek om gegevens",
+    5: "Opdracht bevestiging"};
+
+const dict (Byte: string) OSFcName = {
+    0: "Geen bericht",
+    1: "Onbekende FC 1",
+    2: "Autonoom",
+    3: "Opdracht antwoord",
+    4: "Gegevens",
+    5: "Opdracht bev. antwoord"};
+
+const dict (Byte: string) OSSfcName = {
+    0: "MSI beeldstatus",
+    1: "MSI status",
+    2: "MSI stand",
+    3: "MUS stand",
+    4: "Detectiestatus",
+    5: "OS status",
+    6: "Snelheid en intensiteit",
+    7: "Snelheid laatste voertuig",
+    8: "Versienummer",
+    9: "OS bedrijfstoestand",
+    10: "AID aanbeveling",
+    11: "Wiebeltest status"};
+
+const dict (Byte: string) CCSfcName = {
+    0: "MSI stand OPA",
+    1: "MSI stand AID",
+    2: "OS bedrijfstoestand",
+    3: "Detectorstatus OPA",
+    4: "Detectorstatus beelden",
+    5: "Lichtintensiteit",
+    6: "MUS stand",
+    8: "Wiebeltest",
+    9: "Dyn. maximumsnelheid"};
+
+const dict (Byte: int) ReqLen = {
+    0: msgLen,//5n+3
+    1: min(msgLen, 72),
+    2: min(msgLen, 91),
+    3: 2,
+    4: min(msgLen, 17),
+    5: 2,
+    6: min(msgLen, 96),
+    7: min(msgLen, 32),
+    8: 4,
+    9: 1,
+    10: 4,
+    11: 1};
+
+const dict (Byte: int) CMDLen = {
+    0: min(msgLen, 90),
+    1: min(msgLen, 90),
+    2: 1,
+    3: 4,
+    4: 4,
+    5: 1,
+    6: 1,
+    8: 0,
+    9: 1};

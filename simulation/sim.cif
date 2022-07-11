@@ -1,0 +1,371 @@
+import "../generated_files/constants.cif";
+import "sim_definitions.cif";
+
+group def Sim_Detector():
+  group HW:
+    alg Byte I_speed = VehicleDetection.V;
+    alg bool detect  = VehicleDetection.detect;
+    alg Byte I_state = if State.ok: 0 elif State.degraded: 1 else 2 end;
+  end
+  event e_detect;
+  automaton VehicleDetection:
+    disc bool detect = false;
+    disc real tgen = 0.0;
+    disc Byte V = 0;
+    disc list[2] dist real arrival =
+        [exponential(55 / 60), exponential(70 / 60)];
+    disc list[5] Byte speed = [10, 30, 50, 80, 100];
+    cont t = 0 der 1;
+    location:
+      initial;
+      edge e_detect when Sim.Arrival.auto and t >= tgen do t := 0,
+        (tgen, arrival[Sim.aDist]) := sample arrival[Sim.aDist],
+        V := speed[Sim.vDist],
+        detect := not detect;
+      edge e_detect when Sim.Arrival.manual do t := 0, V := Sim.speed,
+        detect := not detect;
+  end
+  group Sim:
+    alg int vDist = Speed.distribution;
+    alg Byte speed = [10, 30, 50, 80, 100][vDist];
+    alg int aDist = Arrival.distribution;
+    automaton Speed:
+      disc int  distribution = 4;
+      event e_V10, e_V30, e_V50, e_V80, e_V100;
+      location:
+        initial;
+          edge e_V10  do distribution := 0;
+          edge e_V30  do distribution := 1;
+          edge e_V50  do distribution := 2;
+          edge e_V80  do distribution := 3;
+          edge e_V100 do distribution := 4;
+    end
+    automaton Arrival:
+      disc int  distribution = 0;
+      disc bool detectionPresent = false;
+      event e_high, e_low, e_manual;
+      location auto:
+        edge e_low  do distribution := 0;
+        edge e_high do distribution := 1;
+        edge e_manual do detectionPresent :=  true goto manual;
+        edge e_detect;
+      location manual:
+        initial;
+        edge e_low  do distribution := 0 goto auto;
+        edge e_high do distribution := 1 goto auto;
+        edge e_manual do detectionPresent :=  true;
+        edge e_detect when detectionPresent do detectionPresent := false;
+    end
+  end
+  automaton State:
+    event e_ok, e_degraded, e_defect;
+    location ok:
+      initial;
+      edge e_degraded goto degraded;
+      edge e_defect   goto defect;
+    location degraded:
+      edge e_ok       goto ok;
+      edge e_defect   goto defect;
+    location defect:
+      edge e_ok       goto ok;
+      edge e_degraded goto degraded;
+  end
+  input bool inUse, laneInUse;
+end
+
+group def Sim_MSI():
+  group HW:
+    input bool Q_LB;
+    input bool Q_RS;
+    input bool Q_SA;
+    input bool Q_TS;
+    input int[0..7] Q_LS;
+    input Byte Q_groupCode;
+    input Word Q_legendCode;
+    input Byte Q_variationCode;
+
+    alg bool I_TS_ret          = TimeSync.TS_ret;
+    alg bool I_LB_ret          = Loopback.Invert.LB_ret;
+    alg Byte I_FFS             = if FFS.error: 1 else 0 end;
+    alg Byte I_WS              = if WS.warning: 1 else 0 end;
+    alg Byte I_groupCode       = LegendActivation.groupCode;
+    alg Word I_legendCode      = LegendActivation.legendCode;
+    alg Byte I_variationCode   = LegendActivation.variationCode;
+    alg Byte I_legendState     = 0;
+    alg Byte I_groupCodeDB     = 0;
+    alg Byte I_legendCodeDB    = 0;
+    alg Byte I_variationCodeDB = 0;
+    alg Byte I_legendStateDB   = 0;
+    alg Byte I_state           = OldState.oldState * pow(2,4) + State.state;
+    alg Byte I_PS              = OldState.oldState;
+    alg Byte I_AS              = State.state;
+    alg int[0..7] I_LS_ret     = LightStrength.LS_ret;
+  end
+  automaton Fieldbus:
+    event e_activate, e_deactivate;
+    location idle:
+      //initial;
+      edge e_activate goto active;
+    location active:
+      initial;
+      edge e_deactivate goto idle;
+  end
+  alg bool dataExchange = Fieldbus.active;
+  automaton OldState:
+    disc int[0..15] oldState;
+    location:
+      initial;
+      edge State.e_init, State.e_exchange, State.e_inactive, State.e_running,
+          State.e_activate, State.e_deactivate, State.e_reset, State.e_error
+          do oldState := State.state;
+  end
+  automaton State:
+    alg int[0..15] state;
+    alg bool SA = HW.Q_SA;
+    event e_init, e_exchange, e_inactive, e_running,
+          e_activate, e_deactivate, e_reset, e_error;
+    location init:
+      initial;
+      equation state = 1;
+      edge e_exchange   when dataExchange                                 goto inactive;
+    location inactive:
+      equation state = 2;
+      edge e_init       when not dataExchange                             goto init;
+      edge e_running    when communicationGood and Alarm.correct          goto runningInactive;
+      edge e_error      when Alarm.error                                  goto fatal;
+    location runningInactive:
+      equation state = 3;
+      edge e_init       when not dataExchange                             goto init;
+      edge e_inactive   when dataExchange and not communicationGood       goto inactive;
+      edge e_activate   when communicationGood and Alarm.correct and SA goto runningActive;
+      edge e_error      when Alarm.error                                  goto fatal;
+    location runningActive:
+      equation state = 4;
+      edge e_init       when not dataExchange                             goto init;
+      edge e_inactive   when dataExchange and not communicationGood       goto inactive;
+      edge e_deactivate when not SA                                     goto runningInactive;
+      edge e_error      when Alarm.error                                  goto fatal;
+    location fatal:
+      equation state = 15;
+      edge e_init       when not dataExchange                             goto init;
+      edge e_reset                                                        goto inactive;
+  end
+  alg bool communicationGood = dataExchange and Loopback.State.active;
+  automaton Alarm:
+    event e_error, e_correct;
+    location correct:
+      initial;
+      edge e_error   when FFS.error goto error;
+    location error:
+      edge e_correct when not FFS.error goto correct;
+  end
+  automaton WS:
+    event e_warning, e_correct;
+    location correct:
+      initial;
+      edge e_warning goto warning;
+    location warning:
+      edge e_correct goto correct;
+  end
+  automaton FFS:
+    event e_error, e_correct;
+    location correct:
+      initial;
+      edge e_error   goto error;
+    location error:
+      edge e_correct goto correct;
+  end
+  automaton LegendActivation:
+    disc Byte groupCode     = 0;
+    disc Word legendCode    = 0;
+    disc Byte variationCode = 0;
+    event e_activate, e_deactivate, e_display;
+    location idle:
+      initial;
+      edge e_activate when State.runningActive goto active;
+    location active:
+      edge e_deactivate when not State.runningActive
+        do groupCode := 0, legendCode := 0, variationCode := 0 goto idle;
+      edge e_display when (groupCode    != HW.Q_groupCode or
+                          legendCode    != HW.Q_legendCode or
+                          variationCode != HW.Q_variationCode)
+        do groupCode     := HW.Q_groupCode,
+           legendCode    := HW.Q_legendCode,
+           variationCode := HW.Q_variationCode;
+  end
+  alg bool flashers =  HW.I_variationCode = 2;
+  automaton Flashers:
+    event e_on, e_off, e_flash;
+    location off:
+      initial;
+      edge e_on when flashers goto top;
+    location top:
+      edge e_flash when TimeSync.t >= 0.6 goto bottom;
+      edge e_off when not flashers goto off;
+    location bottom:
+      edge e_flash when TimeSync.t <  0.6 goto top;
+      edge e_flash when TimeSync.t >= 1.2 goto none;
+      edge e_off when not flashers goto off;
+    location none:
+      edge e_flash when TimeSync.t <  1.2 goto top;
+      edge e_off when not flashers goto off;
+  end
+  group Loopback:
+    event e_activate, e_deactivate, e_reset, e_invert;
+	const real maxTime = 15.0;
+    automaton State:
+      location inactive:
+        //initial;
+        edge e_activate   when Timer.t >= maxTime and Counter.count >= 4 goto active;
+      location active:
+        initial;
+        edge e_deactivate when Timer.t >= maxTime and Counter.count <  3 goto inactive;
+    end
+    automaton Timer:
+    cont t der 1;
+      location:
+        initial;
+        edge e_reset when t >= maxTime do t := 0;
+    end
+    automaton Counter:
+      disc int count = 0;
+      location:
+        initial;
+        edge e_invert when dataExchange do count := count + 1;
+        edge e_reset  do count := 0;
+    end
+    automaton Invert:
+      disc bool LB_ret = true;
+      alg bool LB = HW.Q_LB;
+      location:
+        initial;
+        edge e_invert when LB = LB_ret do LB_ret := not LB;
+        edge e_deactivate do LB_ret := true;
+    end
+  end
+  automaton TimeSync:
+    disc bool TS_ret = false;
+    alg bool TS = HW.Q_TS;
+    cont t der 1;
+    event e_sync, e_reset;
+    alg bool active = not (State.init or State.fatal);
+    location:
+      initial;
+      edge e_sync when active and TS_ret != TS do TS_ret := TS, t := 0;
+      edge e_reset when not active and TS_ret do TS_ret := false;
+      edge e_reset when t >= 2 do t := 0;
+  end
+  automaton LightStrength:
+    disc int[0..7] LS_ret = 0;
+    alg int[0..7] LS = HW.Q_LS;
+    event e_activate, e_deactivate, e_change;
+    location idle:
+      initial;
+      edge e_activate when State.runningActive do LS_ret := LS goto active;
+    location active:
+      edge e_change when LS_ret != LS do LS_ret := LS;
+      edge e_deactivate when not State.runningActive do LS_ret := 0 goto idle;
+  end
+  automaton ResetMSI:
+    event e_reset_high, e_reset_low;
+    alg bool RS = HW.Q_RS;
+    cont t der 1;
+    location idle:
+      initial;
+      edge e_reset_high when RS do t:= 0 goto resetting;
+    location resetting:
+      edge State.e_reset when not RS and     State.fatal and t >= 5 and t <= 10  goto idle;
+      edge e_reset_low   when not RS and not(State.fatal and t >= 5 and t <= 10) goto idle;
+  end
+end
+
+group def Viz_MSI(alg int ID, x, y; Sim_MSI MSI; alg bool visible; event select):
+  alg string name = fmt("MSI%d", ID);
+  alg string No = fmt("%d", ID);
+  svgcopy id "MSI" post No;
+  svgmove id "MSI" + No to x, y;
+  // LegendPresentation
+  alg bool directive = MSI.HW.I_groupCode = 2;
+  alg bool speed     = MSI.HW.I_groupCode = 1;
+  svgout id "display" + No text value
+      if   speed and MSI.HW.I_legendCode = 50: "50"
+      elif speed and MSI.HW.I_legendCode = 70: "70"
+      elif speed and MSI.HW.I_legendCode = 90: "90"
+      else "" end;
+  svgout id "PijlL"   + No attr "visibility" value
+      if directive and MSI.HW.I_legendCode = 1: "visible" else "hidden" end;
+  svgout id "PijlR"   + No attr "visibility" value
+      if directive and MSI.HW.I_legendCode = 2: "visible" else "hidden" end;
+  svgout id "Kruis"   + No attr "visibility" value
+      if directive and MSI.HW.I_legendCode = 4: "visible" else "hidden" end;
+  // VariationCode
+  svgout id "RR" + No attr "visibility" value
+      if MSI.HW.I_variationCode = 3:  "visible" else "hidden" end;
+  svgout id "FlashersT" + No attr "visibility" value
+      if MSI.Flashers.top:    "visible" else "hidden" end;
+  svgout id "FlashersB" + No attr "visibility" value
+      if MSI.Flashers.bottom: "visible" else "hidden" end;
+
+  // Buttons
+  svgin id name event select;
+  svgcopy id "MSIState" pre name;
+  svgmove id name + "MSIState" to 401, 40;
+  svgout id name + "MSIState" attr "visibility" value if visible: "visible" else "hidden" end;
+  svgout id name + "TextMSIID" text value fmt("MSI %d", ID);
+
+  svgout id name + "GCw" text value MSI.HW.Q_groupCode;
+  svgout id name + "BCw" text value MSI.HW.Q_legendCode;
+  svgout id name + "VCw" text value MSI.HW.Q_variationCode;
+  svgout id name + "LBw" text value MSI.HW.Q_LB;
+  svgout id name + "RSw" text value MSI.HW.Q_RS;
+  svgout id name + "SAw" text value MSI.HW.Q_SA;
+  svgout id name + "TSw" text value MSI.HW.Q_TS;
+  svgout id name + "LSw" text value MSI.HW.Q_LS;
+
+  svgout id name + "ABSGCw" text value MSI.HW.I_groupCode;
+  svgout id name + "ABSBCw" text value MSI.HW.I_legendCode;
+  svgout id name + "ABSVCw" text value MSI.HW.I_variationCode;
+  svgout id name + "LBretw" text value MSI.HW.I_LB_ret;
+  svgout id name + "TSretw" text value MSI.HW.I_TS_ret;
+  svgout id name + "FFSw" text value MSI.HW.I_FFS;
+  svgout id name + "WSw" text value MSI.HW.I_WS;
+  svgout id name + "ASw" text value MSI.HW.I_AS;
+  svgout id name + "PSw" text value MSI.HW.I_PS;
+  svgout id name + "LSretw" text value MSI.HW.I_LS_ret;
+
+  Btn_DEG: Button2(name, "WSMSI",  MSI.WS.e_warning, MSI.WS.e_correct, MSI.WS.warning);
+  Btn_DEF: Button2(name, "FFSMSI", MSI.FFS.e_error, MSI.FFS.e_correct, MSI.Alarm.error);
+
+  Btn_FB:  Button(name, "DataExchange",    MSI.Fieldbus.e_activate,   MSI.Fieldbus.active);
+  Btn_UFB: Button(name, "UitDataExchange", MSI.Fieldbus.e_deactivate, MSI.Fieldbus.idle);
+end
+
+group def Viz_Det(alg int ID, x, y; Sim_Detector Det; alg bool visible; event select):
+  // component
+  svgcopy id "Det" post fmt("%d", ID);
+  svgmove id fmt("Det%d", ID) to x, y;
+  svgout id fmt("Det%d", ID) attr "stroke" value
+      if Det.VehicleDetection.t >= 0.2 : "black" else "yellow" end;
+  // commands
+  alg string name = fmt("Det%d", ID);
+  svgin id name event select;
+  svgcopy id "DetState" pre name;
+  svgmove id name + "DetState" to 401, 40;
+  svgout id name + "DetState" attr "visibility" value
+      if visible : "visible" else "hidden" end;
+  svgout id name + "TextID" text value fmt("Detector%d", ID);
+
+  Btn_OK:    Button(name, "OK",   Det.State.e_ok,         Det.State.ok);
+  Btn_DEG:   Button(name, "DEG",  Det.State.e_degraded,   Det.State.degraded);
+  Btn_DEF:   Button(name, "DEF",  Det.State.e_defect,     Det.State.defect);
+  Btn_V10:   Button(name, "V10",  Det.Sim.Speed.e_V10,    Det.Sim.vDist = 0);
+  Btn_V30:   Button(name, "V30",  Det.Sim.Speed.e_V30,    Det.Sim.vDist = 1);
+  Btn_V50:   Button(name, "V50",  Det.Sim.Speed.e_V50,    Det.Sim.vDist = 2);
+  Btn_V80:   Button(name, "V80",  Det.Sim.Speed.e_V80,    Det.Sim.vDist = 3);
+  Btn_V100:  Button(name, "V100", Det.Sim.Speed.e_V100,   Det.Sim.vDist = 4);
+  Btn_LAAG:  Button(name, "LAAG", Det.Sim.Arrival.e_low,  Det.Sim.Arrival.auto and Det.Sim.aDist = 0);
+  Btn_HOOG:  Button(name, "HOOG", Det.Sim.Arrival.e_high, Det.Sim.Arrival.auto and Det.Sim.aDist = 1);
+  svgin id name + "HAND" event Det.Sim.Arrival.e_manual;
+  svgout id name + "Rect" + "HAND" attr "fill"
+      value if Det.Sim.Arrival.manual: "lightgray" else "none" end;
+end

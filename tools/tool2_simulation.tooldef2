@@ -1,0 +1,29 @@
+from "lib:cif3" import *;
+
+// Folder where all generated files are found and stored.
+string genFolder      = "../generated_files/";
+
+// Input files
+string controller     = genFolder + "G_controller.cif";
+string hardwareMap    = genFolder + "hardware.cif";
+
+// Output files
+string plant          = genFolder + "simulation.cif";
+string simulation     = genFolder + "G_simulation.cif";
+
+// Merge controller with simulation plant
+cif3merge(controller, hardwareMap, "-o", simulation);
+cif3merge(simulation, plant, "-o", simulation);
+
+// Apply some simplifications.
+cif3cif(simulation,
+    "-o", simulation,
+    "-t", "elim-comp-def-inst,elim-state-evt-excl-invs");
+
+// Simulate the controlled system.
+cif3sim(simulation,
+    "-i svg",
+    "-a first",
+    "--frame-rate=10",
+    "-o ,", // suppress console output
+    "--option-dialog=1");

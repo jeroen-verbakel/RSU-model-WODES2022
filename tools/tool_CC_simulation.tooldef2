@@ -1,0 +1,12 @@
+from "lib:cif3" import *;
+
+cif3sim("../CCcom/simulation.cif",
+    "-i svg",
+    "-a first",
+    "-o ,", // suppress console output
+    "--frame-rate=15",
+    "--solver-int-atol=1e-2",
+    "--solver-int-rtol=1e-2",
+    "--solver-root-atol=1e-2",
+    "--solver-root-rtol=1e-2",
+    "--option-dialog=1");

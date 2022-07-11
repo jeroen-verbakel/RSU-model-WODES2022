@@ -1,0 +1,289 @@
+import "constants.cif";
+const Legend VMAXSTAT = SPEED100;
+group OS1:
+  input Legend vMaxDyn;
+  input bool existingLegendOPA;
+  input bool existingLegendAID;
+  input bool withinSpeedLimitOPA;
+  input bool withinSpeedLimitAID;
+  input bool noIllegalCombinations;
+  group State:
+    uncontrollable u_online;
+    input bool idle;
+  end
+  group AIDLocation:
+    alg bool active = (Usage.local or Usage.central) and MSIRow.Functioning.ok;
+    alg bool useLocal = Usage.local or Usage.central and RetainLocalAID.retain;
+    alg Legend recommendation1 = if DetectorRow1.Recommendation1.Warning.on: SPEED50 elif DetectorRow2.Recommendation1.Warning.on: SPEED70 else BLANK end;
+    alg Legend CombinedTS1 = if recommendation1 = SPEED50: SPEED50 elif recommendation1 = SPEED70: SPEED70 elif recommendation1 = SPEED90: SPEED90 else BLANK end;
+    alg Legend corrected1 = if CombinedTS1 = BLANK: BLANK elif CombinedTS1 > vMaxDyn: CombinedTS1 elif CombinedTS1 > VMAXSTAT: vMaxDyn else VMAXSTAT end;
+    alg Variation localVariation1 = if corrected1 = BLANK: BASIC elif corrected1 <= vMaxDyn: REDRING elif corrected1 = SPEED50 or corrected1 = SPEED70: FLASHERS else BASIC end;
+    group Usage:
+      input bool local;
+      input bool central;
+    end
+  end
+  group MSIRow:
+    alg bool inUse = RowUsage.on and Functioning.ok;
+    alg Legend legendAID1 = if AIDLocation.useLocal: AIDLocation.corrected1 elif AIDLocation.Usage.central: Commands.Inc_MSIAID.data1 else BLANK end;
+    alg Variation variationAID1 = if AIDLocation.useLocal: AIDLocation.localVariation1 elif AIDLocation.Usage.central: Commands.Inc_MSIAID.data2 else BASIC end;
+    alg Legend selected1 = if Commands.Inc_MSIOPA.data1 >= legendAID1: Commands.Inc_MSIOPA.data1 else legendAID1 end;
+    alg Variation selectedVariation1 = if Commands.Inc_MSIOPA.data1 > legendAID1: Commands.Inc_MSIOPA.data2 elif Commands.Inc_MSIOPA.data1 = legendAID1 and Commands.Inc_MSIOPA.data2 >= variationAID1: Commands.Inc_MSIOPA.data2 else variationAID1 end;
+    alg Legend legendAID2 = if AIDLocation.useLocal: AIDLocation.corrected1 elif AIDLocation.Usage.central: Commands.Inc_MSIAID.data3 else BLANK end;
+    alg Variation variationAID2 = if AIDLocation.useLocal: AIDLocation.localVariation1 elif AIDLocation.Usage.central: Commands.Inc_MSIAID.data4 else BASIC end;
+    alg Legend selected2 = if Commands.Inc_MSIOPA.data3 >= legendAID2: Commands.Inc_MSIOPA.data3 else legendAID2 end;
+    alg Variation selectedVariation2 = if Commands.Inc_MSIOPA.data3 > legendAID2: Commands.Inc_MSIOPA.data4 elif Commands.Inc_MSIOPA.data3 = legendAID2 and Commands.Inc_MSIOPA.data4 >= variationAID2: Commands.Inc_MSIOPA.data4 else variationAID2 end;
+    plant RowUsage:
+      controllable c_on;
+      controllable c_off;
+      location off:
+        initial; marked;
+        edge c_on goto on;
+      location on:
+        edge c_off goto off;
+    end
+    group Timer:
+      controllable c_start;
+      uncontrollable u_end;
+    end
+    group Functioning:
+      input bool ok;
+    end
+    plant Requested:
+      disc Legend legend1 = NOSIGN;
+      disc Variation variation1 = BASIC;
+      disc Legend legend2 = NOSIGN;
+      disc Variation variation2 = BASIC;
+      location idle:
+        initial; marked;
+        edge Timer.c_start when legend1 != selected1 or variation1 != selectedVariation1 or legend2 != selected2 or variation2 != selectedVariation2 do legend1 := selected1, legend2 := selected2, variation1 := selectedVariation1, variation2 := selectedVariation2 goto waiting;
+      location waiting:
+        edge Timer.u_end goto idle;
+    end
+    group MSI1:
+      controllable c_speed50;
+      controllable c_speed70;
+      controllable c_speed90;
+      controllable c_speed100;
+      controllable c_rightArrow;
+      controllable c_cross;
+      controllable c_blank;
+      controllable c_noSign;
+      alg Legend requested = Requested.legend1;
+      group Functioning:
+        input bool ok;
+        input bool degraded;
+      end
+      plant LegendPresentation:
+        disc Legend shown = NOSIGN;
+        marked shown = NOSIGN;
+        location:
+          initial; marked;
+          edge c_speed50 when shown != SPEED50 do shown := SPEED50;
+          edge c_speed70 when shown != SPEED70 do shown := SPEED70;
+          edge c_speed90 when shown != SPEED90 do shown := SPEED90;
+          edge c_speed100 when shown != SPEED100 do shown := SPEED100;
+          edge c_rightArrow when shown != RIGHTARROW do shown := RIGHTARROW;
+          edge c_cross when shown != CROSS do shown := CROSS;
+          edge c_blank when shown != BLANK do shown := BLANK;
+          edge c_noSign when shown != NOSIGN do shown := NOSIGN;
+      end
+      plant VariationCode:
+        controllable c_basic;
+        controllable c_flashers;
+        controllable c_redRing;
+        disc Variation shown = BASIC;
+        location:
+          initial; marked;
+          edge c_basic when shown != BASIC do shown := BASIC;
+          edge c_flashers when shown != FLASHERS do shown := FLASHERS;
+          edge c_redRing when shown != REDRING do shown := REDRING;
+      end
+      requirement c_speed50 needs inUse and (Functioning.ok or Functioning.degraded) and requested = SPEED50;
+      requirement c_speed70 needs inUse and (Functioning.ok or Functioning.degraded) and requested = SPEED70;
+      requirement c_speed90 needs inUse and (Functioning.ok or Functioning.degraded) and requested = SPEED90;
+      requirement c_speed100 needs inUse and (Functioning.ok or Functioning.degraded) and requested = SPEED100;
+      requirement c_rightArrow needs inUse and (Functioning.ok or Functioning.degraded) and requested = RIGHTARROW;
+      requirement c_cross needs inUse and (Functioning.ok or Functioning.degraded) and requested = CROSS;
+      requirement c_blank needs inUse and (Functioning.ok or Functioning.degraded) and requested = BLANK;
+      requirement c_noSign needs not inUse;
+      requirement VariationCode.c_flashers needs inUse and (Functioning.ok or Functioning.degraded) and Requested.variation1 = FLASHERS;
+      requirement VariationCode.c_redRing needs inUse and (Functioning.ok or Functioning.degraded) and Requested.variation1 = REDRING;
+      requirement VariationCode.c_basic needs inUse and (Functioning.ok or Functioning.degraded) and Requested.variation1 = BASIC or not inUse;
+    end
+    group MSI2:
+      controllable c_speed50;
+      controllable c_speed70;
+      controllable c_speed90;
+      controllable c_speed100;
+      controllable c_leftArrow;
+      controllable c_cross;
+      controllable c_blank;
+      controllable c_noSign;
+      alg Legend requested = Requested.legend2;
+      group Functioning:
+        input bool ok;
+        input bool degraded;
+      end
+      plant LegendPresentation:
+        disc Legend shown = NOSIGN;
+        marked shown = NOSIGN;
+        location:
+          initial; marked;
+          edge c_speed50 when shown != SPEED50 do shown := SPEED50;
+          edge c_speed70 when shown != SPEED70 do shown := SPEED70;
+          edge c_speed90 when shown != SPEED90 do shown := SPEED90;
+          edge c_speed100 when shown != SPEED100 do shown := SPEED100;
+          edge c_leftArrow when shown != LEFTARROW do shown := LEFTARROW;
+          edge c_cross when shown != CROSS do shown := CROSS;
+          edge c_blank when shown != BLANK do shown := BLANK;
+          edge c_noSign when shown != NOSIGN do shown := NOSIGN;
+      end
+      plant VariationCode:
+        controllable c_basic;
+        controllable c_flashers;
+        controllable c_redRing;
+        disc Variation shown = BASIC;
+        location:
+          initial; marked;
+          edge c_basic when shown != BASIC do shown := BASIC;
+          edge c_flashers when shown != FLASHERS do shown := FLASHERS;
+          edge c_redRing when shown != REDRING do shown := REDRING;
+      end
+      requirement c_speed50 needs inUse and (Functioning.ok or Functioning.degraded) and requested = SPEED50;
+      requirement c_speed70 needs inUse and (Functioning.ok or Functioning.degraded) and requested = SPEED70;
+      requirement c_speed90 needs inUse and (Functioning.ok or Functioning.degraded) and requested = SPEED90;
+      requirement c_speed100 needs inUse and (Functioning.ok or Functioning.degraded) and requested = SPEED100;
+      requirement c_leftArrow needs inUse and (Functioning.ok or Functioning.degraded) and requested = LEFTARROW;
+      requirement c_cross needs inUse and (Functioning.ok or Functioning.degraded) and requested = CROSS;
+      requirement c_blank needs inUse and (Functioning.ok or Functioning.degraded) and requested = BLANK;
+      requirement c_noSign needs not inUse;
+      requirement VariationCode.c_flashers needs inUse and (Functioning.ok or Functioning.degraded) and Requested.variation2 = FLASHERS;
+      requirement VariationCode.c_redRing needs inUse and (Functioning.ok or Functioning.degraded) and Requested.variation2 = REDRING;
+      requirement VariationCode.c_basic needs inUse and (Functioning.ok or Functioning.degraded) and Requested.variation2 = BASIC or not inUse;
+    end
+    requirement MSI1.c_cross needs MSI2.requested != LEFTARROW;
+    requirement MSI2.c_leftArrow needs MSI1.requested != CROSS;
+    requirement MSI1.c_rightArrow needs MSI2.requested != LEFTARROW;
+    requirement MSI2.c_leftArrow needs MSI1.requested != RIGHTARROW;
+    requirement MSI1.c_rightArrow needs MSI2.requested != CROSS;
+    requirement MSI2.c_cross needs MSI1.requested != RIGHTARROW;
+  end
+  group Commands:
+    plant MSIOPA:
+      uncontrollable u_confirm;
+      controllable c_accept;
+      controllable c_reject;
+      location waiting:
+        initial; marked;
+        edge u_confirm goto received;
+      location received:
+        edge c_accept goto waiting;
+        edge c_reject goto waiting;
+    end
+    group Inc_MSIOPA:
+      input Legend data1;
+      input Variation data2;
+      input Legend data3;
+      input Variation data4;
+    end
+    plant MSIAID:
+      uncontrollable u_confirm;
+      controllable c_accept;
+      controllable c_reject;
+      location waiting:
+        initial; marked;
+        edge u_confirm goto received;
+      location received:
+        edge c_accept goto waiting;
+        edge c_reject goto waiting;
+    end
+    group Inc_MSIAID:
+      input Legend data1;
+      input Variation data2;
+      input Legend data3;
+      input Variation data4;
+    end
+  end
+  requirement RetainLocalAID:
+    monitor Commands.MSIAID.c_accept, State.u_online;
+    location retain:
+      initial; marked;
+      edge Commands.MSIAID.c_accept goto new;
+    location new:
+      marked;
+      edge State.u_online goto retain;
+  end
+  requirement MSIRow.RowUsage.c_on needs not State.idle;
+  requirement MSIRow.RowUsage.c_off needs State.idle;
+  requirement Commands.MSIOPA.c_accept needs existingLegendOPA and withinSpeedLimitOPA and noIllegalCombinations;
+  requirement Commands.MSIOPA.c_reject needs not (existingLegendOPA and withinSpeedLimitOPA and noIllegalCombinations);
+  requirement Commands.MSIAID.c_accept needs existingLegendAID and withinSpeedLimitAID;
+  requirement Commands.MSIAID.c_reject needs not (existingLegendAID and withinSpeedLimitAID);
+end
+group DetectorRow1:
+  group Detector1:
+    input bool inUse;
+    input bool laneInUse;
+    alg bool calculationAllowed = inUse and laneInUse and Functioning.ok and OS1.AIDLocation.active;
+    input Classification incident;
+    group Functioning:
+      input bool ok;
+    end
+  end
+  group Detector2:
+    input bool inUse;
+    input bool laneInUse;
+    alg bool calculationAllowed = inUse and laneInUse and Functioning.ok and OS1.AIDLocation.active;
+    input Classification incident;
+    group Functioning:
+      input bool ok;
+    end
+  end
+  group Recommendation1:
+    plant Warning:
+      controllable c_on;
+      controllable c_off;
+      location off:
+        initial; marked;
+        edge c_on goto on;
+      location on:
+        edge c_off goto off;
+    end
+    requirement Warning.c_on needs Detector1.incident = INCIDENT or Detector2.incident = INCIDENT;
+    requirement Warning.c_off needs Detector1.incident != INCIDENT and Detector1.incident != DOUBTFUL and Detector2.incident != INCIDENT and Detector2.incident != DOUBTFUL;
+  end
+end
+group DetectorRow2:
+  group Detector1:
+    input bool inUse;
+    input bool laneInUse;
+    alg bool calculationAllowed = inUse and laneInUse and Functioning.ok and OS1.AIDLocation.active;
+    input Classification incident;
+    group Functioning:
+      input bool ok;
+    end
+  end
+  group Detector2:
+    input bool inUse;
+    input bool laneInUse;
+    alg bool calculationAllowed = inUse and laneInUse and Functioning.ok and OS1.AIDLocation.active;
+    input Classification incident;
+    group Functioning:
+      input bool ok;
+    end
+  end
+  group Recommendation1:
+    plant Warning:
+      controllable c_on;
+      controllable c_off;
+      location off:
+        initial; marked;
+        edge c_on goto on;
+      location on:
+        edge c_off goto off;
+    end
+    requirement Warning.c_on needs Detector1.incident = INCIDENT or Detector2.incident = INCIDENT;
+    requirement Warning.c_off needs Detector1.incident != INCIDENT and Detector1.incident != DOUBTFUL and Detector2.incident != INCIDENT and Detector2.incident != DOUBTFUL;
+  end
+end

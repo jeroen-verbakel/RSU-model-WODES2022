@@ -1,0 +1,53 @@
+import "../simulation/sim.cif";
+import "constants.cif";
+svgfile "../simulation/visualisation.svg";
+svgout id "tijd" text value fmt("%.1f", time);
+group OS1:
+  group MSIRow:
+    MSI1: Sim_MSI();
+    MSI2: Sim_MSI();
+  end
+  group HW:
+    input Byte Q_nr;
+    input Byte Q_mc;
+    input list[18] Byte Q_data;
+    alg Byte I_nr = Receiver.I_nr;
+    alg Byte I_mc = Receiver.I_mc;
+    alg list[18] Byte I_data = Receiver.I_data;
+    alg Byte I_ack = Receiver.I_ack;
+  end
+  Receiver: Ext_Receiver(HW.Q_nr, HW.Q_mc, HW.Q_data, []);
+end
+group Viz:
+  event e_msi1;
+  event e_msi2;
+  event e_det11;
+  event e_det12;
+  event e_det21;
+  event e_det22;
+  automaton Select:
+    disc int comp = 1;
+    location:
+      initial;
+      edge e_msi1 do comp := 1;
+      edge e_msi2 do comp := 2;
+      edge e_det11 do comp := 11;
+      edge e_det12 do comp := 12;
+      edge e_det21 do comp := 21;
+      edge e_det22 do comp := 22;
+  end
+  MSI1: Viz_MSI(1, 50, 400, OS1.MSIRow.MSI1, Select.comp = 1, e_msi1);
+  MSI2: Viz_MSI(2, 140, 400, OS1.MSIRow.MSI2, Select.comp = 2, e_msi2);
+  Det11: Viz_Det(11, 50, 300, DetectorRow1.Detector1, Select.comp = 11, e_det11);
+  Det12: Viz_Det(12, 140, 300, DetectorRow1.Detector2, Select.comp = 12, e_det12);
+  Det21: Viz_Det(21, 50, 200, DetectorRow2.Detector1, Select.comp = 21, e_det21);
+  Det22: Viz_Det(22, 140, 200, DetectorRow2.Detector2, Select.comp = 22, e_det22);
+end
+group DetectorRow1:
+  Detector1: Sim_Detector();
+  Detector2: Sim_Detector();
+end
+group DetectorRow2:
+  Detector1: Sim_Detector();
+  Detector2: Sim_Detector();
+end

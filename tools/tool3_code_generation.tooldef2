@@ -1,0 +1,31 @@
+from "lib:cif3" import *;
+
+// Folder where all generated files are found and stored.
+string genFolder      = "../generated_files/";
+
+// Input files
+string controller     = genFolder + "G_controller.cif";
+string hardwareMap    = genFolder + "hardware.cif";
+string ioTable        = genFolder + "IoTable.csv";
+
+// Output files
+string plcCode        = genFolder + "G_PLC_model.cif";
+string outputFolder   = genFolder + "PLC_code/";
+
+// Clean output folder
+rmdir(outputFolder, true);
+mkdir(outputFolder, true);
+
+// Merge controller and hardwareMap.
+cif3merge(controller, hardwareMap, "-o", plcCode);
+
+// Apply some simplifications to reduce output size.
+cif3cif(plcCode,
+    "-o", plcCode,
+    "-t elim-state-evt-excl-invs,elim-consts,simplify-values",
+    "--devmode=1");
+
+plcgen2(plcCode,
+    "-o", outputFolder,
+    "--io-table-name="+ioTable,
+    "--option-dialog=1");
